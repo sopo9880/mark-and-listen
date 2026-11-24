@@ -1,0 +1,79 @@
+name: Windows x64 prerelease 0.0.0.2
+"on":
+  push:
+    branches: [main]
+    paths: [".github/workflows/release-win64.yml"]
+    tags: [v0.0.0.2]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+concurrency:
+  group: mark-and-listen-release-v0.0.0.2
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'sopo9880/mark-and-listen' && (github.ref == 'refs/heads/main' || github.ref == 'refs/tags/v0.0.0.2')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      RELEASE_TAG: v0.0.0.2
+      INSTALLER: Mark-and-Listen-0.0.0.2-Windows-x64-Setup.exe
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24.22.3'
+
+      - name: Build and verify installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node -p 'require("./package.json").version')" = "0.0.0-2"
+          npm test
+          tools="$RUNNER_TEMP/mark-release-tools"
+          mkdir -p "$tools"
+          install_deb() {
+            local deb_path="$1" digest="$2" deb="$tools/${1##*/}"
+            curl --fail --silent --show-error --location --retry 3 --max-time 60 \
+              "https://deb.debian.org/debian/$deb_path" --output "$deb"
+            printf '%s  %s\n' "$digest" "$deb" | sha256sum --check -
+            dpkg-deb -x "$deb" "$tools"
+          }
+          install_deb 'pool/main/n/nsis/nsis_3.11-1_amd64.deb' 'e6eb6ffb70f0df09e95dedb2d2cf55ad3c2679f7c2ae357d0c00cc4c83178690'
+          install_deb 'pool/main/n/nsis/nsis-common_3.11-1_all.deb' '103a3284c1a5356efa0aba90fdfc391c3cde8e7df8726377cef0f98471584047'
+          install_deb 'pool/main/7/7zip/7zip_25.01+dfsg-1~deb13u2_amd64.deb' 'b2cb210bee3be6a10230b38b8645d71846d19364b157f44fd08e1a54cae1652f'
+          export NSISDIR="$tools/usr/share/nsis"
+          python3 desktop/build-windows.py --out dist/windows --makensis "$tools/usr/bin/makensis"
+          python3 desktop/verify-windows.py "dist/windows/$INSTALLER" --7zip "$tools/usr/lib/7zip/7z" --http-smoke
+          (cd dist/windows && sha256sum "$INSTALLER" > SHA256SUMS.txt && sha256sum --check SHA256SUMS.txt)
+
+      - name: Publish first prerelease without replacing anything
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          target="$(git rev-parse HEAD)"
+          [[ "$target" =~ ^[a-f0-9]{40}$ ]]
+          releases="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" --jq '.[].tag_name')"
+          if grep -Fxq "$RELEASE_TAG" <<< "$releases"; then
+            echo "Release already exists; nothing was changed."
+            exit 0
+          fi
+          ref="refs/tags/$RELEASE_TAG"
+          refs="$(git ls-remote origin "$ref" "${ref}^{}")"
+          remote="$(awk -v r="$ref" '$2 == r {a=$1} $2 == r "^{}" {b=$1} END {print (b ? b : a)}' <<< "$refs")"
+          extra=()
+          if [[ -n "$remote" ]]; then
+            test "$remote" = "$target" || { echo "Existing tag points at a different commit."; exit 1; }
+            extra+=(--verify-tag)
+          fi
+          gh release create "$RELEASE_TAG" \
+            "dist/windows/$INSTALLER" dist/windows/SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" --target "$target" "${extra[@]}" \
+            --prerelease --title "Mark & Listen 0.0.0.2" \
+            --notes "Unsigned Windows x64 installer rebuilt from commit $target. The install payload and offline HTTP routes were verified by CI; native Windows execution was not tested."
