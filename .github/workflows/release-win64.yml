@@ -2,7 +2,7 @@ name: Windows x64 prerelease 0.0.0.2
 "on":
   push:
     branches: [main]
-    paths: [".github/workflows/release-win64.yml"]
+    paths: [".github/workflows/release-win64.yml", "desktop/verify-windows.py"]
     tags: [v0.0.0.2]
   workflow_dispatch:
 
