@@ -57,7 +57,7 @@ def main():
             script = """
 import assert from 'node:assert/strict';
 import {pathToFileURL} from 'node:url';
-const {buildServer} = await import(pathToFileURL(process.argv[1]));
+const {buildServer} = await import(pathToFileURL(process.argv[2]));
 const server = await buildServer();
 await new Promise((resolve, reject) => {
   server.once('error', reject); server.listen(0, '127.0.0.1', resolve);
@@ -67,7 +67,7 @@ try {
   const root = await fetch(base); assert.equal(root.status, 200);
   assert.match(await root.text(), /Mark &amp; Listen/);
   const session = await (await fetch(base + '/api/session')).json();
-  assert.equal(session.build, process.argv[2]); assert.equal(typeof session.token, 'string');
+  assert.equal(session.build, process.argv[3]); assert.equal(typeof session.token, 'string');
   for (const path of ['/app.mjs', '/full-exam.mjs', '/full-lc.mjs', '/full-lc-layout.mjs',
                       '/full-lc-source.mjs', '/full-lc-timings.mjs', '/full-rc.mjs']) {
     const r = await fetch(base + path);
@@ -80,8 +80,8 @@ try {
   console.log('Extracted backend served build ' + session.build + ', full test modules and offline MP3.');
 } finally { server.closeAllConnections(); server.close(); }
 """
-            subprocess.run(['node','--input-type=module','-e',script,str(app / 'src' / 'server.mjs'),
-                            expected.replace('-', '.')], check=True)
+            subprocess.run(['node','--input-type=module','-e',script,'packaged-http-probe',str(app / 'src' / 'server.mjs'),
+                            expected.replace('-', '.')], check=True, timeout=20)
         print(f'Windows x64 GUI setup + app verified ({expected}); {len(origins)} files match the current source, including {len(list((app / "public" / "audio").rglob("*.mp3")))} MP3s.')
         print(f'Setup SHA-256 {digest(args.setup)}')
 
