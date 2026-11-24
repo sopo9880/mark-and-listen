@@ -15,7 +15,8 @@ concurrency:
 env:
   VERSION: 0.1.1.0
   INSTALLER: Mark-and-Listen-0.1.1.0-Windows-x64-Setup.exe
-  MARK_UPDATE_PUBLIC_KEY: ${{ vars.MARK_UPDATE_PUBLIC_KEY }}
+  # Repository variable shared by the installer build and manifest verification.
+  MARK_UPDATE_PUBLIC_KEY: ${{ vars.APP_UPDATE_PUBLIC_KEY }}
 
 jobs:
   windows:
@@ -37,6 +38,9 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:MARK_UPDATE_PUBLIC_KEY)) {
+            throw 'Configure the APP_UPDATE_PUBLIC_KEY repository variable before building a release.'
+          }
           ./scripts/prepare-windows.ps1
           rustup target add x86_64-pc-windows-msvc
           npm run build:windows
@@ -73,7 +77,8 @@ jobs:
           path: beta
       - name: Verify build and sign the update manifest
         env:
-          MARK_UPDATE_PRIVATE_KEY: ${{ secrets.MARK_UPDATE_PRIVATE_KEY }}
+          # Repository secret available only in this signing step.
+          MARK_UPDATE_PRIVATE_KEY: ${{ secrets.APP_UPDATE_PRIVATE_KEY }}
         shell: bash
         run: |
           set -euo pipefail
