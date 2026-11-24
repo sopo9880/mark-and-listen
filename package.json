@@ -1,9 +1,9 @@
 {
   "name": "mark-and-listen",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
-  "description": "Mark & Listen \u2014 0.1.0.0 beta",
+  "description": "Mark & Listen \u2014 0.1.1.0 beta",
   "scripts": {
     "start": "node src/start-beta.mjs",
     "test": "node --test beta-test/*.test.mjs",
@@ -15,7 +15,7 @@
   "engines": {
     "node": ">=22"
   },
-  "displayVersion": "0.1.0.0",
+  "displayVersion": "0.1.1.0",
   "devDependencies": {
     "@tauri-apps/cli": "2.10.1"
   }

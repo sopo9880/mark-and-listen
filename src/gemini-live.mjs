@@ -149,10 +149,12 @@ export async function auditionWithGeminiLive({
       if (message.setupComplete && !requestSent) {
         requestSent = true;
         try {
-          socket.send(JSON.stringify({ clientContent: {
-            turns: [{ role: 'user', parts: [{ text: prompt.trim() }] }],
-            turnComplete: true,
-          } }));
+          const text = 'Read the exact English script between the delimiters aloud now. Do not say the delimiters, ask for a script, or add words. Read every line in order.\nBEGIN SCRIPT\n' + prompt.trim() + '\nEND SCRIPT';
+          if (/^gemini-(?:[4-9]|[1-9][0-9]+)\./.test(modelId) || /^gemini-3\.(?:[2-9]|[1-9][0-9]+)(?:\.|-)/.test(modelId)) {
+            socket.send(JSON.stringify({ clientContent: { turns: [{ role: 'user', parts: [{ text }] }], turnComplete: true } }));
+          } else {
+            socket.send(JSON.stringify({ realtimeInput: { text } }));
+          }
         } catch {
           finish(new Error('Gemini Live could not send the audition text.'));
         }

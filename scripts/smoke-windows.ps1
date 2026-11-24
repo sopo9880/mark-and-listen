@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$Installer)
+param([Parameter(Mandatory=$true)][string]$Installer, [string]$ExpectedVersion)
 $ErrorActionPreference = 'Stop'
 $target = Join-Path $env:RUNNER_TEMP 'Mark & Listen smoke install'
 $env:MARK_LISTEN_DATA = Join-Path $env:RUNNER_TEMP 'mark-listen-beta-data'
@@ -34,7 +34,7 @@ try {
             $session = Invoke-RestMethod 'http://127.0.0.1:4175/api/session' -TimeoutSec 2
             $smoke = Invoke-RestMethod 'http://127.0.0.1:4175/api/smoke' -TimeoutSec 2
             $lastCheck = "version=$($session.build) webview-ready=$($smoke.uiReady) window=$($app.MainWindowHandle)"
-            if ($session.build -eq '0.1.0.0' -and $session.smoke -and $smoke.uiReady -and $app.MainWindowHandle -ne 0) {
+            if ($session.build -eq $ExpectedVersion -and $session.smoke -and $smoke.uiReady -and $app.MainWindowHandle -ne 0) {
                 $ready = $true
                 break
             }

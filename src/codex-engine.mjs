@@ -50,3 +50,17 @@ export async function generateWithCodex({executable,prompt,signal,runCommand=run
     if(scratch) await rm(scratch,{recursive:true,force:true}).catch(()=>{});
   }
 }
+
+export async function codexLoginStatus(executable) {
+  const result=await run(executable,['login','status'],{signal:AbortSignal.timeout(5000)});
+  if(result.code===0&&/logged in (?:with|using) ChatGPT/i.test(result.stdout+' '+result.stderr))return 'connected';
+  return 'unverified';
+}
+
+// The CLI manages OAuth and opens the system browser. Never return its output,
+// which can contain one-time authentication data.
+export async function codexBrowserLogin(executable, signal=AbortSignal.timeout(300000)) {
+  const result=await run(executable,['login'],{signal});
+  if(result.code!==0)throw Error('Codex 브라우저 로그인이 완료되지 않았습니다.');
+  return codexLoginStatus(executable);
+}

@@ -46,9 +46,8 @@ test('Gemini Live preserves ordered PCM chunks in a mono 24 kHz 16-bit WAV', asy
   const { socket, promise } = take();
   setup(socket);
   assert.equal(socket.sent[0].setup.model, `models/${DEFAULT_GEMINI_LIVE_MODEL}`);
-  assert.deepEqual(socket.sent[1].clientContent, {
-    turns: [{ role: 'user', parts: [{ text: input.prompt }] }], turnComplete: true,
-  });
+  assert.match(socket.sent[1].clientContent.turns[0].parts[0].text, /BEGIN SCRIPT\n별이 다시 떠올라\nEND SCRIPT/);
+  assert.equal(socket.sent[1].clientContent.turnComplete, true);
   assert.equal(JSON.stringify(socket.sent).includes(key), false);
   socket.emit({ setupComplete: {} }); // duplicated event must not trigger a second billed turn
   assert.equal(socket.sent.length, 2);
@@ -108,4 +107,20 @@ test('mixed sample rates, invalid base64, and provider error data are safely rej
   setup(socket);
   socket.emit({ error: { message: key } });
   await assert.rejects(promise, (error) => /rejected/.test(error.message) && !error.message.includes(key));
+});
+
+test('one Gemini request contains the complete ordered A–D script and collects multiple output events', async () => {
+  const script = 'A. The doors are shut. B. A chair is upside down. C. Three boxes are stacked. D. The room is not empty.';
+  for (const model of ['gemini-3.8-live','gemini-3.1-flash-live-preview']) {
+    const {socket,promise}=take({prompt:script,model});
+    setup(socket);
+    const turn=socket.sent[1];
+    const text=turn.realtimeInput?.text??turn.clientContent.turns[0].parts[0].text;
+    assert.ok(text.includes(script));
+    assert.equal(socket.sent.length,2);
+    const split=script.indexOf(' C.');
+    socket.emit({serverContent:{modelTurn:{parts:[pcm([1,2])]},outputTranscription:{text:script.slice(0,split)}}});
+    socket.emit({serverContent:{modelTurn:{parts:[pcm([3,4])]},outputTranscription:{text:script.slice(split)},turnComplete:true}});
+    assert.equal((await promise).transcript,script);
+  }
 });

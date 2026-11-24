@@ -1,0 +1,97 @@
+name: Signed Windows x64 beta 0.1.1.0
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/release-beta-win64.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mark-and-listen-release-v0.1.1.0
+  cancel-in-progress: false
+
+env:
+  VERSION: 0.1.1.0
+  INSTALLER: Mark-and-Listen-0.1.1.0-Windows-x64-Setup.exe
+  MARK_UPDATE_PUBLIC_KEY: ${{ vars.MARK_UPDATE_PUBLIC_KEY }}
+
+jobs:
+  windows:
+    if: github.repository == 'sopo9880/mark-and-listen' && github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.22.3'
+      - name: Run test suite
+        run: |
+          npm ci
+          npm test
+      - name: Build and install in system WebView2
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          ./scripts/prepare-windows.ps1
+          rustup target add x86_64-pc-windows-msvc
+          npm run build:windows
+          $setup = @(Get-ChildItem 'src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis' -Filter '*.exe')
+          if ($setup.Count -ne 1) { throw 'Expected one setup EXE' }
+          New-Item -ItemType Directory -Force dist/windows | Out-Null
+          Copy-Item $setup[0].FullName "dist/windows/$env:INSTALLER"
+          ./scripts/smoke-windows.ps1 -Installer (Resolve-Path "dist/windows/$env:INSTALLER") -ExpectedVersion $env:VERSION
+          $hash = (Get-FileHash "dist/windows/$env:INSTALLER" -Algorithm SHA256).Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText((Join-Path $PWD "dist/windows/SHA256SUMS.txt"), "$hash  $env:INSTALLER" + [char]10, [Text.Encoding]::ASCII)
+          $size = (Get-Item "dist/windows/$env:INSTALLER").Length
+          Add-Content $env:GITHUB_STEP_SUMMARY "Installer: $size bytes | SHA-256: $hash"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: beta-windows-x64
+          path: dist/windows/
+          if-no-files-found: error
+
+  publish:
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.22.3'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: beta-windows-x64
+          path: beta
+      - name: Verify build and sign the update manifest
+        env:
+          MARK_UPDATE_PRIVATE_KEY: ${{ secrets.MARK_UPDATE_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd beta && test "$(sha256sum "$INSTALLER")" = "$(cat SHA256SUMS.txt)")
+          node scripts/sign-app-update.mjs beta
+      - name: Publish a new GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          releases="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" --jq '.[].tag_name')"
+          tags="$(gh api --paginate "repos/$GITHUB_REPOSITORY/tags" --jq '.[].name')"
+          if grep -Fxq "$tag" <<< "$releases" || grep -Fxq "$tag" <<< "$tags"; then
+            echo "::error::Release or tag already exists"
+            exit 1
+          fi
+          gh release create "$tag" "beta/$INSTALLER" beta/SHA256SUMS.txt beta/update.json beta/update.json.sig \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title "Mark & Listen $VERSION Beta" --notes-file BETA-0.1.1.0.md

@@ -22,19 +22,20 @@ function checkedModel(provider, rawModel) {
   return model;
 }
 
-function getRequest(provider, model, key, prompt) {
+function getRequest(provider, model, key, prompt, images) {
   const contentJson = { 'Content-Type': 'application/json' };
+  const encoded = images?.map(bytes => bytes.toString('base64')) ?? [];
   if (provider === 'openai') {
     return [
       'https://api.openai.com/v1/responses',
       { ...contentJson, Authorization: `Bearer ${key}` },
-      { model, input: prompt, store: false, max_output_tokens: MAX_OUTPUT_TOKENS },
+      { model, input: encoded.length ? [{role:"user",content:[{type:"input_text",text:prompt},...encoded.map(data=>({type:"input_image",image_url:"data:image/jpeg;base64,"+data,detail:"high"}))]}] : prompt, store: false, max_output_tokens: MAX_OUTPUT_TOKENS },
     ];
   }
   return [
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
     { ...contentJson, 'x-goog-api-key': key },
-    { contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS } },
+    { contents: [{ role: 'user', parts: [{ text: prompt },...encoded.map(data=>({inlineData:{mimeType:"image/jpeg",data}}))] }], generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS } },
   ];
 }
 
@@ -79,7 +80,7 @@ function readGemini(data) {
  * @returns {Promise<string>} completed provider answer; partial or hidden
  * reasoning is intentionally not passed to the caller as a valid song draft.
  */
-export async function generateWithProvider({ provider, model, apiKey, prompt, signal, fetchImpl = globalThis.fetch } = {}) {
+export async function generateWithProvider({ provider, model, apiKey, prompt, images, signal, fetchImpl = globalThis.fetch } = {}) {
   if (provider !== 'openai' && provider !== 'gemini') throw new Error('Unsupported text provider.');
   if (typeof prompt !== 'string' || !prompt.trim()) throw new Error('A non-empty text prompt is required.');
   if (prompt.length > 100_000) throw new Error('The prompt is too long.');
@@ -92,7 +93,7 @@ export async function generateWithProvider({ provider, model, apiKey, prompt, si
   if (signal?.aborted) throw new Error('Request cancelled.');
   const deadline = AbortSignal.timeout(90_000);
   const requestSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
-  const [url, headers, payload] = getRequest(provider, normalizedModel, key, prompt);
+  const [url, headers, payload] = getRequest(provider, normalizedModel, key, prompt, images);
 
   let data;
   try {

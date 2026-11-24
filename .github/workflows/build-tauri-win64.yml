@@ -1,14 +1,5 @@
 name: Tauri Windows x64 beta
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/build-tauri-win64.yml'
-      - 'src-tauri/**'
-      - 'public/beta*'
-      - 'src/beta-server.mjs'
-      - 'src/start-beta.mjs'
-      - 'scripts/**'
   workflow_dispatch:
 
 permissions:
@@ -20,6 +11,7 @@ concurrency:
 
 jobs:
   windows-x64:
+    if: github.sha == 'a0e44520c42fa767949c899f6cd8a5e52afae479'
     runs-on: windows-latest
     timeout-minutes: 30
     steps:

@@ -47,10 +47,13 @@ fn main() {
             let stdout = child.stdout.take().ok_or("Backend stdout unavailable")?;
             let backend = Backend(Mutex::new(child));
             let (tx, rx) = mpsc::channel();
+            let app_handle = app.handle().clone();
             std::thread::spawn(move || {
                 for line in BufReader::new(stdout).lines().map_while(Result::ok) {
                     if line == "MARK_READY:4175" {
                         let _ = tx.send(());
+                    } else if line == "MARK_INSTALL_READY" {
+                        app_handle.exit(0);
                     }
                 }
             });
@@ -58,7 +61,7 @@ fn main() {
                 .map_err(|err| io::Error::other(format!("Installed backend did not signal readiness: {err}")))?;
 
             WebviewWindowBuilder::new(app, "main", WebviewUrl::External("http://127.0.0.1:4175".parse()?))
-                .title("Mark & Listen 0.1.0.0 Beta")
+                .title("Mark & Listen 0.1.1.0 Beta")
                 .inner_size(1320.0, 900.0).min_inner_size(850.0, 600.0)
                 .on_navigation(|url| url.scheme() == "http" && url.host_str() == Some("127.0.0.1") && url.port() == Some(4175))
                 .build()
