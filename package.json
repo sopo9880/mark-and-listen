@@ -1,6 +1,22 @@
 {
-  "name": "mark-and-listen", "version": "0.0.0-2", "private": true, "type": "module",
-  "description": "Mark & Listen — build 0.0.0.2",
-  "scripts": { "start": "node src/server.mjs", "test": "node --test" },
-  "engines": { "node": ">=22" }
+  "name": "mark-and-listen",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mark & Listen \u2014 0.1.0.0 beta",
+  "scripts": {
+    "start": "node src/beta-server.mjs",
+    "test": "node --test beta-test/*.test.mjs",
+    "test:legacy": "node --test test/*.test.mjs",
+    "stage": "node scripts/stage.mjs",
+    "tauri": "tauri",
+    "build:windows": "tauri build --target x86_64-pc-windows-msvc --bundles nsis"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "displayVersion": "0.1.0.0",
+  "devDependencies": {
+    "@tauri-apps/cli": "2.10.1"
+  }
 }

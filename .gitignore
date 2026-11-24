@@ -3,3 +3,7 @@ node_modules/
 .env.*
 test-output/
 *.log
+
+node_modules/
+staging/
+src-tauri/target/
