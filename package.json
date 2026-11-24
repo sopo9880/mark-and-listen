@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Mark & Listen \u2014 0.1.0.0 beta",
   "scripts": {
-    "start": "node src/beta-server.mjs",
+    "start": "node src/start-beta.mjs",
     "test": "node --test beta-test/*.test.mjs",
     "test:legacy": "node --test test/*.test.mjs",
     "stage": "node scripts/stage.mjs",

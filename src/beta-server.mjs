@@ -2,7 +2,7 @@ import {createServer} from 'node:http';
 import {randomBytes} from 'node:crypto';
 import {readFile,writeFile,mkdir,stat,rename} from 'node:fs/promises';
 import {createReadStream} from 'node:fs';
-import {join,resolve,extname} from 'node:path';
+import {join,extname} from 'node:path';
 import {homedir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {EpisodeStore,transcriptDiff} from './episode-store.mjs';
@@ -18,10 +18,10 @@ const PUBLIC=fileURLToPath(new URL('../public/',import.meta.url));
 const dataRoot=()=>process.env.MARK_LISTEN_DATA||join(process.platform==='win32'?(process.env.LOCALAPPDATA||homedir()):join(homedir(),'.local','share'),'mark-and-listen');
 const fail=(status,message)=>Object.assign(Error(message),{status});
 const json=async req=>{if(!req.headers['content-type']?.startsWith('application/json'))throw fail(415,'JSON 필요');let size=0;const parts=[];for await(const chunk of req){size+=chunk.length;if(size>4_000_000)throw fail(413,'요청 크기 초과');parts.push(chunk);}try{return JSON.parse(Buffer.concat(parts));}catch{throw fail(400,'JSON 오류');}};
-export async function buildBetaServer({root=dataRoot(),updater,generate=generateWithProvider,codex=generateWithCodex,live,models=listLiveModels,autoUpdate=true}={}){
+export async function buildBetaServer({root=dataRoot(),updater,generate=generateWithProvider,codex=generateWithCodex,live,models=listLiveModels,autoUpdate=true,smoke=false}={}){
  const store=await new EpisodeStore(join(root,'episodes')).init();updater??=createCodexUpdater({root:join(root,'codex')});
  let settings={autoUpdate:true,liveProvider:'gemini',liveModel:'',textProvider:'codex',textModel:''};try{settings={...settings,...JSON.parse(await readFile(join(root,'settings.json'),'utf8'))};}catch(e){if(e.code!=='ENOENT')throw e;}
- const keys={};let busy=false,updateBusy=false,lastUpdate=0,updateError='',cooldown=0;const modelCache=new Map();const token=randomBytes(32).toString('hex');
+ const keys={};let uiReady=false,busy=false,updateBusy=false,lastUpdate=0,updateError='',cooldown=0;const modelCache=new Map();const token=randomBytes(32).toString('hex');
  const persist=async()=>{await writeFile(join(root,'settings.tmp'),JSON.stringify(settings),{mode:0o600});await rename(join(root,'settings.tmp'),join(root,'settings.json'));};
  const performUpdate=async()=>{if(busy||updateBusy)return;updateBusy=true;try{if((await store.list()).some(e=>e.attempts.some(a=>a.phase!=='done'&&a.phaseEndsAt>Date.now())))return;lastUpdate=Date.now();if((await updater.status()).supported)await updater.install('latest');updateError='';}catch{updateError='업데이트 실패 · 기존 엔진을 유지합니다.';}finally{updateBusy=false;}};
  const speak=live??(args=>args.provider==='gemini'?auditionWithGeminiLive(args):auditionWithOpenAILive(args));
@@ -32,11 +32,13 @@ export async function buildBetaServer({root=dataRoot(),updater,generate=generate
  const server=createServer(async(req,res)=>{
  res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Content-Security-Policy',"default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'");
  try{const port=server.address()?.port;if(req.headers.host!==`127.0.0.1:${port}`||req.headers.origin&&req.headers.origin!==`http://127.0.0.1:${port}`||req.headers['sec-fetch-site']==='cross-site')throw fail(403,'다른 사이트의 요청은 허용하지 않습니다.');const path=new URL(req.url,'http://localhost').pathname;
- if(req.method==='GET'&&path==='/api/session'){send(res,{token,build:VERSION});return;}
+ if(req.method==='GET'&&path==='/api/session'){send(res,{token,build:VERSION,...(smoke?{smoke:true}:{})});return;}
+ if(smoke&&req.method==='GET'&&path==='/api/smoke'){send(res,{uiReady});return;}
  if(req.method==='GET'&&path==='/api/library'){send(res,{episodes:await store.list()});return;}
  if(req.method==='GET'&&path==='/api/settings'){send(res,{...settings,keys:{gemini:!!getKey('gemini'),openai:!!getKey('openai')},codex:await updater.status(),updateBusy,updateError});return;}
  const media=/^\/api\/media\/([a-zA-Z0-9-]+)\/([a-zA-Z0-9-]+)$/.exec(path);if(media&&['GET','HEAD'].includes(req.method)){await stream(req,res,await store.audio(media[1],media[2]),'audio/wav');return;}
  if(req.method==='POST'&&path.startsWith('/api/')){if(req.headers['x-mark-session']!==token)throw fail(403,'앱을 새로고침하세요.');const b=await json(req);
+ if(smoke&&path==='/api/smoke'){uiReady=b.uiReady===true;send(res,{uiReady});return;}
  if(path==='/api/settings'){if(busy||updateBusy)throw fail(409,'현재 작업이 끝난 후 설정을 바꾸세요.');if(b.keyProvider){credentials(b.keyProvider,b.apiKey);keys[b.keyProvider]=b.apiKey;modelCache.delete(b.keyProvider);}for(const k of ['liveProvider','textProvider'])if(b[k]!==undefined){const allowed=k==='liveProvider'?['gemini','openai']:['codex','gemini','openai'];if(!allowed.includes(b[k]))throw fail(400,'공급자 오류');settings[k]=b[k];}for(const k of ['liveModel','textModel'])if(b[k]!==undefined){if(typeof b[k]!=='string'||b[k].length>160||!/^[a-zA-Z0-9_.:-]*$/.test(b[k]))throw fail(400,'모델 ID 오류');settings[k]=b[k];}if(typeof b.autoUpdate==='boolean')settings.autoUpdate=b.autoUpdate;await persist();send(res,{ok:true});return;}
  if(path==='/api/models'){const provider=b.provider;const list=await models({provider,apiKey:getKey(provider)});modelCache.set(provider,list);send(res,{models:list});return;}
  if(path==='/api/codex/update'){if(busy||updateBusy)throw fail(409,'작업 중에는 교체하지 않습니다.');await performUpdate();send(res,{status:await updater.status(),error:updateError});return;}
@@ -62,4 +64,3 @@ export async function buildBetaServer({root=dataRoot(),updater,generate=generate
  }catch(e){if(!res.destroyed&&!res.headersSent)send(res,{error:e.status?e.message:e.code==='ENOENT'?'저장된 파일을 찾을 수 없습니다.':'작업을 완료하지 못했습니다. 설정과 저장 공간을 확인하세요.'},e.status||500);}});
  const interval=setInterval(()=>{if(autoUpdate&&settings.autoUpdate&&Date.now()-lastUpdate>24*3600000)void performUpdate();},60000);interval.unref();server.once('close',()=>clearInterval(interval));server.once('listening',()=>{if(autoUpdate&&settings.autoUpdate)void performUpdate();});server.requestTimeout=130000;return {server,store};
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){const {server}=await buildBetaServer({autoUpdate:process.env.MARK_LISTEN_SMOKE!=='1'});server.listen(Number(process.env.PORT||4173),'127.0.0.1',()=>console.log('MARK_READY:'+server.address().port));process.stdin.resume();process.stdin.once('end',()=>{server.closeAllConnections();server.close();process.exit(0);});}

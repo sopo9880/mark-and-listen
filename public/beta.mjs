@@ -37,4 +37,11 @@ async function exam(id,initial){dispose();tab='exam';const e=(await api('library
  function tick(){if(stopped||s.phase==='done')return;const current=advanceAttempt(s);time.textContent=`${current.phase} ${Math.floor(Math.max(0,current.phaseEndsAt-Date.now())/60000).toString().padStart(2,'0')}:${Math.floor(Math.max(0,current.phaseEndsAt-Date.now())/1000%60).toString().padStart(2,'0')}`;if(current.phase!==s.phase&&!syncing){syncing=true;action({type:'sync'}).finally(()=>{syncing=false;});return;}if(s.phase!=='LC'){stopAudio();audioStatus.textContent='RC · 인터넷 연결 없이 저장된 문제로 응시 중';return;}const elapsed=(Date.now()-s.phaseStartedAt)/1000;const seg=timeline.find(t=>elapsed>=t.start&&elapsed<t.end);if(!armed){audioStatus.textContent='듣기 시작을 눌러 현재 시험 시간 위치에서 재생하세요.';return;}if(!seg){audio.pause();audioStatus.textContent='답안 작성 시간';return;}if(played!==seg.id){played=seg.id;audio.src=audioMap.get(seg.id);audio.onloadedmetadata=()=>{audio.currentTime=Math.min(Math.max(0,(Date.now()-s.phaseStartedAt)/1000-seg.start),Math.max(0,audio.duration-.05));};audio.play().catch(()=>{armed=false;audioStatus.textContent='재생을 허용하려면 듣기 시작을 누르세요.';});}audioStatus.textContent=`저장 음원 재생 · ${seg.groupId} · ${seg.speaker}`;}
  const timer=setInterval(tick,250);tick();dispose=()=>{stopped=true;clearInterval(timer);stopAudio();};}
 for(const b of document.querySelectorAll('[data-tab]'))b.onclick=run(()=>show(b.dataset.tab));
-try{token=(await api('session')).token;await show('home');}catch(e){$('notice').textContent=e.message;}
+try {
+  const session = await api('session');
+  token = session.token;
+  await show('home');
+  if (session.smoke) await api('smoke', { uiReady: !!root.querySelector('.hero h1') });
+} catch (error) {
+  $('notice').textContent = error.message;
+}
