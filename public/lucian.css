@@ -1,0 +1,1143 @@
+/* Lucian UX/UI Prompt elements used by Mark & Listen (MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/).
+   1) theme tokens + .ux base, 2) element CSS copied unchanged (#039 #070 #447 #095 #151),
+   3) the Mark & Listen brand mapping and slot adaptations at the end of this file. */
+/* Lucian UX/UI Prompt theme tokens · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/
+   Every element reads its colors from these --ux-* tokens and uses the .ux base rules below. */
+/* lucianLabs UI 요소 — 공통 테마 토큰 (라이트 / 다크)
+   라이트 기본값 → 시스템이 다크면 다크 → data-theme으로 명시하면 그 값을 우선합니다.
+   요소 CSS는 --ux-* 토큰만 참조하므로, 프로젝트 테마 변수에 이 값을 매핑하면 됩니다. */
+:root {
+  color-scheme: light;
+  --ux-page: #f4f2ee;
+  --ux-surface: #ffffff;
+  --ux-surface-2: #f5f3ef;
+  --ux-surface-3: #eae7e1;
+  --ux-ink: #16151b;
+  --ux-ink-2: #57535f;
+  --ux-ink-3: #8e8a97;
+  --ux-line: rgba(22, 21, 27, 0.09);
+  --ux-line-2: rgba(22, 21, 27, 0.17);
+  --ux-accent: #6a57f2;
+  --ux-accent-2: #2f8fe0;
+  --ux-accent-soft: rgba(106, 87, 242, 0.12);
+  --ux-accent-ink: #ffffff;
+  --ux-mint: #119c72;
+  --ux-warn: #d6731e;
+  --ux-danger: #d93a55;
+  --ux-glass: rgba(255, 255, 255, 0.58);
+  --ux-glass-line: rgba(255, 255, 255, 0.85);
+  --ux-shadow: rgba(40, 30, 80, 0.14);
+  --ux-shadow-strong: rgba(40, 30, 80, 0.3);
+  --ux-grad: linear-gradient(120deg, #7b61ff, #3d8bff 55%, #1fb89a);
+  --ux-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ux-spring: cubic-bezier(0.34, 1.45, 0.64, 1);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ux-page: #07080d;
+    --ux-surface: #13141c;
+    --ux-surface-2: #1a1b25;
+    --ux-surface-3: #252632;
+    --ux-ink: #f4f0e8;
+    --ux-ink-2: rgba(244, 240, 232, 0.68);
+    --ux-ink-3: rgba(244, 240, 232, 0.42);
+    --ux-line: rgba(255, 255, 255, 0.08);
+    --ux-line-2: rgba(255, 255, 255, 0.16);
+    --ux-accent: #b7a4ff;
+    --ux-accent-2: #7db4ff;
+    --ux-accent-soft: rgba(183, 164, 255, 0.15);
+    --ux-accent-ink: #0b0c12;
+    --ux-mint: #7ee8c0;
+    --ux-warn: #ffb26b;
+    --ux-danger: #ff7d8c;
+    --ux-glass: rgba(255, 255, 255, 0.07);
+    --ux-glass-line: rgba(255, 255, 255, 0.18);
+    --ux-shadow: rgba(0, 0, 0, 0.45);
+    --ux-shadow-strong: rgba(0, 0, 0, 0.72);
+    --ux-grad: linear-gradient(120deg, #b7a4ff, #7db4ff 55%, #a5f2d3);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ux-page: #07080d;
+  --ux-surface: #13141c;
+  --ux-surface-2: #1a1b25;
+  --ux-surface-3: #252632;
+  --ux-ink: #f4f0e8;
+  --ux-ink-2: rgba(244, 240, 232, 0.68);
+  --ux-ink-3: rgba(244, 240, 232, 0.42);
+  --ux-line: rgba(255, 255, 255, 0.08);
+  --ux-line-2: rgba(255, 255, 255, 0.16);
+  --ux-accent: #b7a4ff;
+  --ux-accent-2: #7db4ff;
+  --ux-accent-soft: rgba(183, 164, 255, 0.15);
+  --ux-accent-ink: #0b0c12;
+  --ux-mint: #7ee8c0;
+  --ux-warn: #ffb26b;
+  --ux-danger: #ff7d8c;
+  --ux-glass: rgba(255, 255, 255, 0.07);
+  --ux-glass-line: rgba(255, 255, 255, 0.18);
+  --ux-shadow: rgba(0, 0, 0, 0.45);
+  --ux-shadow-strong: rgba(0, 0, 0, 0.72);
+  --ux-grad: linear-gradient(120deg, #b7a4ff, #7db4ff 55%, #a5f2d3);
+}
+/* 요소 공통 베이스 — 루트에 .ux 클래스를 붙입니다 */
+.ux,
+.ux *,
+.ux *::before,
+.ux *::after {
+  box-sizing: border-box;
+}
+.ux {
+  font-family:
+    "Pretendard Variable",
+    Pretendard,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Apple SD Gothic Neo",
+    "Segoe UI",
+    Roboto,
+    "Noto Sans KR",
+    sans-serif;
+  color: var(--ux-ink);
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.01em;
+  -webkit-tap-highlight-color: transparent;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+/* :where()로 명시도를 0으로 둬서, 요소 클래스가 버튼·입력의 색과 글꼴을 덮어쓸 수 있게 합니다 */
+:where(.ux) :is(button, input, textarea, select) {
+  font: inherit;
+  color: inherit;
+}
+:where(.ux) button {
+  cursor: pointer;
+}
+.ux :focus-visible {
+  outline: 2px solid var(--ux-accent);
+  outline-offset: 3px;
+}
+.ux [hidden] {
+  display: none !important;
+}
+/* 모션 줄이기: 전환은 즉시 끝나고, 무한 반복은 한 번으로 줄여 최종 상태가 보이게 합니다 */
+@media (prefers-reduced-motion: reduce) {
+  .ux,
+  .ux *,
+  .ux *::before,
+  .ux *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Lucian UX/UI Prompt #039 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#039 */
+.u039 {
+  position: relative;
+  width: 340px;
+  height: 380px;
+}
+.u039-tabs {
+  position: relative;
+  display: flex;
+  padding: 5px;
+  border-radius: 999px;
+  background: var(--ux-surface);
+  box-shadow: 0 0 0 1px var(--ux-line);
+}
+.u039-pill {
+  position: absolute;
+  left: 0;
+  top: 5px;
+  bottom: 5px;
+  width: var(--w, 80px);
+  border-radius: 999px;
+  background: var(--ux-ink);
+  transform: translateX(var(--x, 5px));
+  box-shadow: 0 8px 16px -10px var(--ux-shadow-strong);
+  transition:
+    transform 0.5s var(--ux-spring),
+    width 0.5s var(--ux-spring);
+}
+.u039-tab {
+  position: relative;
+  flex: 1;
+  height: 42px;
+  border: 0;
+  padding: 0;
+  border-radius: 999px;
+  background: none;
+  font-size: 14px;
+  font-weight: 680;
+  color: var(--ux-ink-2);
+  white-space: nowrap;
+  transition: color 0.35s var(--ux-ease);
+}
+.u039-tab[aria-selected="true"] {
+  color: var(--ux-page);
+}
+.u039-tab:focus-visible {
+  outline: 2px solid var(--ux-accent);
+  outline-offset: 2px;
+}
+.u039-panel {
+  position: relative;
+  height: 312px;
+  margin-top: 14px;
+  overflow: hidden;
+  border-radius: 22px;
+}
+.u039-list {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.u039-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 18px;
+  background: var(--ux-surface);
+  box-shadow: 0 0 0 1px var(--ux-line);
+  transition:
+    transform 0.55s var(--ux-spring),
+    opacity 0.35s var(--ux-ease);
+}
+.u039-art {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  flex: none;
+  border-radius: 14px;
+  background: var(--g);
+  overflow: hidden;
+}
+.u039-art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.45), transparent 55%);
+}
+.u039-row b {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.u039-row small {
+  display: block;
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--ux-ink-3);
+}
+.u039-row em {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--ux-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.u039-badge {
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 800;
+  background: var(--ux-accent-soft);
+  color: var(--ux-accent);
+  vertical-align: 2px;
+}
+
+/* Lucian UX/UI Prompt #070 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#070 */
+.u070 {
+  position: relative;
+  width: 350px;
+  height: 370px;
+}
+.u070-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.u070-btns button {
+  height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--ux-surface);
+  box-shadow: 0 0 0 1px var(--ux-line);
+  font-size: 13px;
+  font-weight: 720;
+  color: var(--ux-ink);
+  transition:
+    transform 0.3s var(--ux-spring),
+    box-shadow 0.3s;
+}
+.u070-btns button:hover {
+  box-shadow:
+    0 0 0 1px var(--ux-line-2),
+    0 8px 16px -10px var(--ux-shadow-strong);
+}
+.u070-btns button:active {
+  transform: scale(0.94);
+}
+.u070-btns button:focus-visible {
+  outline: 2px solid var(--ux-accent);
+  outline-offset: 2px;
+}
+.u070-btns i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c);
+}
+.u070-zone {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 300px;
+  outline: none;
+}
+.u070-t {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 68px;
+  padding: 12px 12px 12px 14px;
+  border-radius: 20px;
+  background: var(--ux-surface);
+  box-shadow:
+    0 0 0 1px var(--ux-line),
+    0 16px 30px -18px var(--ux-shadow-strong);
+  transform-origin: 50% 100%;
+  transform: translate(var(--dx, 0px), var(--y, 0px)) scale(var(--s, 1));
+  opacity: var(--o, 1);
+  transition:
+    transform 0.5s var(--ux-spring),
+    opacity 0.35s;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.u070-t.drag {
+  transition: none;
+}
+.u070-t.enter {
+  transform: translateY(90px) scale(0.9);
+  opacity: 0;
+}
+.u070-t.leave {
+  transform: translate(var(--dx, 0px), var(--y, 0px)) scale(var(--s, 1));
+  opacity: 0;
+  pointer-events: none;
+}
+.u070-t.leave.side {
+  transform: translate(calc(var(--dir, 1) * 420px), var(--y, 0px)) rotate(calc(var(--dir, 1) * 8deg));
+}
+.u070-t > * {
+  transition: opacity 0.25s;
+}
+.u070-t.back > * {
+  opacity: 0;
+}
+.u070-ic {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--c) 15%, transparent);
+  color: var(--c);
+}
+.u070-ic svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.u070-ic i {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2.5px solid currentColor;
+  border-right-color: transparent;
+  animation: u070-spin 0.7s linear infinite;
+}
+@keyframes u070-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.u070-tx {
+  flex: 1;
+  min-width: 0;
+}
+.u070-tx b {
+  display: block;
+  font-size: 14px;
+  font-weight: 780;
+  letter-spacing: -0.02em;
+}
+.u070-tx small {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ux-ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.u070-act {
+  height: 32px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--ux-surface-2);
+  font-size: 12.5px;
+  font-weight: 750;
+  color: var(--ux-ink);
+}
+.u070-x {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border: 0;
+  padding: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: none;
+  color: var(--ux-ink-3);
+}
+.u070-x:hover {
+  background: var(--ux-surface-2);
+  color: var(--ux-ink);
+}
+.u070-x svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+.u070-act:focus-visible,
+.u070-x:focus-visible {
+  outline: 2px solid var(--ux-accent);
+  outline-offset: 1px;
+}
+.u070-bar {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--c);
+  opacity: 0.5;
+  transform-origin: 0 50%;
+  transform: scaleX(var(--left, 1));
+}
+.u070-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.u070-empty {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 24px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ux-ink-3);
+  transition: opacity 0.3s;
+}
+
+/* Lucian UX/UI Prompt #447 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#447 */
+.u447 {
+  position: relative;
+  width: 340px;
+  height: 300px;
+  display: grid;
+  place-items: center;
+}
+.u447-b {
+  position: relative;
+  width: 176px;
+  height: 74px;
+  padding: 0;
+  border: 0;
+  border-radius: 37px;
+  overflow: hidden;
+  isolation: isolate;
+  background: #4fa8f7;
+  box-shadow:
+    inset 0 3px 7px rgba(0, 0, 0, 0.28),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.25),
+    0 0 0 1px rgba(0, 0, 0, 0.06),
+    0 10px 24px -14px rgba(20, 40, 90, 0.55);
+  transition: transform 0.45s var(--ux-spring);
+}
+.u447-b:active {
+  transform: scale(0.97);
+}
+.u447 .u447-b:focus-visible {
+  outline: 2px solid var(--ux-accent);
+  outline-offset: 4px;
+}
+.u447-b > * {
+  position: absolute;
+  pointer-events: none;
+}
+.u447-sky {
+  inset: 0;
+  background: linear-gradient(180deg, #3e97ec, #86c8ff);
+  transition: opacity 0.6s;
+}
+.u447-ngt {
+  inset: 0;
+  opacity: 0;
+  background: linear-gradient(180deg, #151840, #2c3170);
+  transition: opacity 0.6s;
+}
+.u447-halo {
+  left: 6px;
+  top: 6px;
+  width: 62px;
+  height: 62px;
+  transition: transform 0.75s var(--ux-spring);
+}
+.u447-halo i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  transform: translate(-50%, -50%);
+}
+.u447-halo i:nth-child(1) {
+  width: 96px;
+  height: 96px;
+}
+.u447-halo i:nth-child(2) {
+  width: 132px;
+  height: 132px;
+  background: rgba(255, 255, 255, 0.09);
+}
+.u447-halo i:nth-child(3) {
+  width: 170px;
+  height: 170px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.u447-cl {
+  right: -14px;
+  bottom: -16px;
+  width: 136px;
+  height: 68px;
+  transition: transform 0.6s var(--ux-ease) 0.05s;
+}
+.u447-cl g {
+  animation: u447-drift 7s ease-in-out infinite alternate;
+}
+.u447-cl g + g {
+  animation-duration: 5.5s;
+}
+@keyframes u447-drift {
+  to {
+    transform: translateX(-5px);
+  }
+}
+.u447-sr {
+  left: 16px;
+  top: 8px;
+  width: 90px;
+  height: 58px;
+  opacity: 0;
+  transform: translateY(-36px);
+  transition:
+    transform 0.6s var(--ux-ease),
+    opacity 0.4s;
+}
+.u447-sr path,
+.u447-sr circle {
+  fill: #ffffff;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: u447-tw 2.4s ease-in-out infinite;
+}
+.u447-sr :nth-child(2n) {
+  animation-delay: -0.8s;
+}
+.u447-sr :nth-child(3n) {
+  animation-delay: -1.6s;
+}
+@keyframes u447-tw {
+  50% {
+    opacity: 0.45;
+    transform: scale(0.7);
+  }
+}
+.u447-th {
+  left: 6px;
+  top: 6px;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffe27a, #ffc21f 60%, #f2a900);
+  box-shadow:
+    0 4px 8px rgba(0, 0, 0, 0.28),
+    inset -3px -4px 6px rgba(190, 110, 0, 0.35),
+    inset 3px 3px 5px rgba(255, 255, 255, 0.45);
+  transition: transform 0.75s var(--ux-spring);
+}
+.u447-th::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #f4f3fa, #d6d3e6 65%, #b9b5cf);
+  box-shadow:
+    inset -3px -4px 6px rgba(70, 64, 110, 0.35),
+    inset 3px 3px 5px rgba(255, 255, 255, 0.6);
+  opacity: 0;
+  transition: opacity 0.45s 0.1s;
+}
+.u447-th svg {
+  position: absolute;
+  inset: 0;
+  width: 62px;
+  height: 62px;
+}
+.u447-th circle {
+  fill: #a9a4c4;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(0);
+  transition:
+    opacity 0.3s,
+    transform 0.5s var(--ux-spring);
+}
+.u447-th circle:nth-child(2) {
+  transition-delay: 0.06s;
+}
+.u447-th circle:nth-child(3) {
+  transition-delay: 0.12s;
+}
+.u447-b[aria-checked="true"] .u447-ngt {
+  opacity: 1;
+}
+.u447-b[aria-checked="true"] .u447-halo {
+  transform: translateX(102px);
+}
+.u447-b[aria-checked="true"] .u447-th {
+  transform: translateX(102px) rotate(200deg);
+}
+.u447-b[aria-checked="true"] .u447-th::before {
+  opacity: 1;
+}
+.u447-b[aria-checked="true"] .u447-th circle {
+  opacity: 1;
+  transform: none;
+  transition-delay: 0.25s;
+}
+.u447-b[aria-checked="true"] .u447-cl {
+  transform: translateY(56px);
+  transition-delay: 0s;
+}
+.u447-b[aria-checked="true"] .u447-sr {
+  opacity: 1;
+  transform: none;
+  transition-delay: 0.15s;
+}
+
+/* Lucian UX/UI Prompt #095 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#095 */
+.u095 {
+  position: relative;
+  width: 340px;
+  height: 410px;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 18px 14px;
+  border-radius: 30px;
+  background: var(--ux-surface);
+  box-shadow:
+    0 0 0 1px var(--ux-line),
+    0 30px 60px -36px var(--ux-shadow-strong);
+  overflow: hidden;
+}
+.u095-h {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.u095-h small {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ux-ink-3);
+}
+.u095-v {
+  margin-top: 2px;
+}
+.u095-v b {
+  font-size: 29px;
+  font-weight: 850;
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+}
+.u095-top {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.u095-dl {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ux-mint);
+  white-space: nowrap;
+}
+.u095-dl.dn {
+  color: var(--ux-danger);
+}
+.u095-seg {
+  position: relative;
+  display: flex;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--ux-surface-2);
+}
+.u095-seg::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: 36px;
+  border-radius: 9px;
+  background: var(--ux-surface);
+  box-shadow: 0 1px 4px -1px var(--ux-shadow-strong);
+  transform: translateX(calc(var(--k, 0) * 36px));
+  transition: transform 0.45s var(--ux-spring);
+}
+.u095-seg button {
+  position: relative;
+  width: 36px;
+  height: 30px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--ux-ink-3);
+  transition: color 0.2s;
+}
+.u095-seg button[aria-pressed="true"] {
+  color: var(--ux-ink);
+}
+.u095-ch {
+  position: relative;
+  flex: 1;
+  margin-top: 18px;
+  padding-right: 44px;
+}
+.u095-grid {
+  position: absolute;
+  inset: 0 0 26px 0;
+}
+.u095-gl {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px dashed var(--ux-line-2);
+}
+.u095-gl span {
+  position: absolute;
+  right: 0;
+  top: -7px;
+  transition: opacity 0.3s;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ux-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.u095-gl:first-child {
+  border-top-style: solid;
+}
+.u095-avg {
+  position: absolute;
+  left: 0;
+  right: 40px;
+  bottom: calc(26px + var(--a, 0) * (100% - 26px));
+  height: 0;
+  border-top: 1.5px dashed var(--ux-accent);
+  transition: bottom 0.6s var(--ux-spring);
+  z-index: 2;
+  pointer-events: none;
+}
+.u095-avg span {
+  position: absolute;
+  right: -44px;
+  top: -10px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: var(--ux-accent);
+  color: var(--ux-accent-ink);
+  font-size: 10px;
+  font-weight: 800;
+}
+.u095-bars {
+  position: absolute;
+  left: 0;
+  right: 44px;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: stretch;
+}
+.u095-b {
+  position: relative;
+  flex: var(--on, 1) 1 0;
+  min-width: 0;
+  padding: 0 var(--pad, 4px);
+  border: 0;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  transition:
+    flex-grow 0.55s var(--ux-ease),
+    padding 0.55s var(--ux-ease),
+    opacity 0.3s;
+}
+.u095-b.off {
+  --on: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.u095-b i {
+  display: block;
+  height: calc(var(--h, 0) * (100% - 26px));
+  margin-bottom: 26px;
+  border-radius: 8px 8px 4px 4px;
+  background: var(--ux-surface-3);
+  transition:
+    height 0.65s var(--ux-spring),
+    background-color 0.25s,
+    opacity 0.25s;
+  transition-delay: calc(var(--d, 0) * 28ms), 0s, 0s;
+}
+.u095-b.last i {
+  background: var(--ux-grad);
+}
+.u095-b em {
+  position: absolute;
+  left: -6px;
+  right: -6px;
+  bottom: 4px;
+  font-style: normal;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ux-ink-3);
+  white-space: nowrap;
+  transition: color 0.2s;
+}
+.u095.has .u095-b:not(.on) i {
+  opacity: 0.5;
+}
+.u095-b.on i {
+  background: var(--ux-accent);
+  opacity: 1;
+}
+.u095-b.on em {
+  color: var(--ux-ink);
+}
+.u095-b.pin i {
+  box-shadow:
+    0 0 0 2px var(--ux-surface),
+    0 0 0 4px var(--ux-accent);
+}
+.u095-b:focus-visible {
+  outline: none;
+}
+.u095-b:focus-visible i {
+  box-shadow:
+    0 0 0 2px var(--ux-surface),
+    0 0 0 4px var(--ux-accent);
+}
+.u095-tip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--ux-ink);
+  color: var(--ux-page);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translate(var(--tx), var(--ty));
+  opacity: 0;
+  transition:
+    opacity 0.2s,
+    transform 0.3s var(--ux-ease);
+}
+.u095.has .u095-tip {
+  opacity: 1;
+}
+.u095-tip small {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--ux-mint);
+}
+.u095-tip small.dn {
+  color: #ff8f92;
+}
+.u095-seg button:focus-visible {
+  outline: 2px solid var(--ux-accent);
+  outline-offset: 1px;
+  border-radius: 9px;
+}
+
+/* Lucian UX/UI Prompt #151 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#151 */
+.u151 {
+  width: 100%;
+  max-width: 390px;
+  padding: 16px;
+  position: relative;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.u151 button {
+  border: 1px solid var(--ux-line-2);
+  background: var(--ux-surface);
+  padding: 8px 12px;
+  border-radius: 10px;
+  min-height: 44px;
+  font-size: 12px;
+  transition:
+    background 0.2s,
+    transform 0.3s var(--ux-ease);
+}
+.u151 button[aria-pressed="true"] {
+  background: var(--ux-accent-soft);
+  border-color: var(--ux-accent);
+}
+.u151 button:active {
+  transform: scale(0.97);
+}
+.u151 small {
+  color: var(--ux-ink-2);
+  font-size: 12px;
+}
+.u151 .status {
+  margin-top: 10px;
+  color: var(--ux-ink-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.u151 .status b {
+  color: var(--ux-ink);
+}
+.u151 .controls {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.u151 svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+.u151 svg text {
+  font-family: inherit;
+  fill: var(--ux-ink-2);
+  font-size: 11px;
+}
+.u151 .gridline {
+  stroke: var(--ux-line-2);
+  fill: none;
+}
+.u151 input[type="range"] {
+  width: 100%;
+  height: 44px;
+  accent-color: var(--ux-accent);
+  margin: 0;
+}
+.u151 .inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.u151 .month {
+  display: flex;
+  justify-content: space-between;
+  color: var(--ux-ink-2);
+  font-size: 12px;
+}
+.u151 .heat {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-template-rows: repeat(7, 20px);
+  grid-auto-flow: column;
+  gap: 4px;
+  margin: 12px 0 0;
+}
+.u151 .heat i {
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ux-mint) calc(var(--v) * 20%), var(--ux-surface-3));
+  transition:
+    background 0.25s,
+    transform 0.25s;
+}
+.u151 .heat i.chosen {
+  outline: 2px solid var(--ux-ink);
+  outline-offset: 1px;
+  transform: translateY(-2px);
+}
+.u151 .date {
+  font-size: 12px;
+  color: var(--ux-ink-2);
+}
+.u151 .count {
+  font-weight: 750;
+  color: var(--ux-mint);
+  font-size: 18px;
+}
+.u151 {
+  min-height: 0;
+  box-shadow: none;
+}
+.u151 .status {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  min-height: 0;
+  height: auto;
+}
+.u151 .inline {
+  margin-bottom: 8px;
+}
+
+/* ── Mark & Listen: brand mapping of the --ux-* accent tokens (logo forest green + lime) ── */
+:root {
+  --ux-accent: #2e6b55;
+  --ux-accent-2: #4f8f3a;
+  --ux-accent-soft: rgba(46, 107, 85, 0.12);
+  --ux-accent-ink: #ffffff;
+  --ux-grad: linear-gradient(120deg, #22463a, #3c8e6e 55%, #b8cc3a);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ux-accent: #9fd8b4;
+    --ux-accent-2: #cfe05a;
+    --ux-accent-soft: rgba(159, 216, 180, 0.15);
+    --ux-accent-ink: #0b1410;
+    --ux-grad: linear-gradient(120deg, #9fd8b4, #7cc7a0 55%, #cfe05a);
+  }
+}
+:root[data-theme="dark"] {
+  --ux-accent: #9fd8b4;
+  --ux-accent-2: #cfe05a;
+  --ux-accent-soft: rgba(159, 216, 180, 0.15);
+  --ux-accent-ink: #0b1410;
+  --ux-grad: linear-gradient(120deg, #9fd8b4, #7cc7a0 55%, #cfe05a);
+}
+
+/* ── Slot adaptations (sizes only; shapes, colors and motion are unchanged) ── */
+/* #039: used as an inline tab bar without the demo panel, so the root follows its content. */
+.u039.u039-inline {
+  width: fit-content;
+  justify-self: start;
+  height: auto;
+  display: inline-block;
+  max-width: 100%;
+  min-width: 0;
+}
+.u039-inline .u039-tab {
+  flex: 1 0 auto;
+  padding: 0 16px;
+  height: 36px;
+  font-size: 13.5px;
+}
+.u039-inline .u039-tabs {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+/* #070: a fixed toast host at the bottom-right of the window; only the toasts take pointer input. */
+.u070.u070-host {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  width: min(350px, calc(100vw - 44px));
+  height: 300px;
+  z-index: 60;
+  pointer-events: none;
+}
+.u070-host .u070-zone {
+  pointer-events: none;
+}
+.u070-host .u070-t {
+  pointer-events: auto;
+}
+/* #095 and #151 follow the width of their dashboard card. */
+.u095.u095-fluid {
+  width: 100%;
+  height: 360px;
+  box-shadow: none;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.u151.u151-fluid {
+  max-width: none;
+  padding: 0;
+}
+/* #447: sits at the bottom of the sidebar; the root only reserves the switch's own size. */
+.u447.u447-slot {
+  width: 176px;
+  height: 74px;
+  margin: 4px auto 0;
+}

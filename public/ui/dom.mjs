@@ -109,18 +109,7 @@ export function button(label, onClick, { kind = "", iconName, title, disabled, s
   return b;
 }
 
-export function toast(message, kind = "info", ms = 4200) {
-  if (!message) return;
-  const host = document.getElementById("toasts");
-  const node = h(
-    "div",
-    { class: ["toast", "toast-" + kind], role: kind === "error" ? "alert" : "status" },
-    message,
-  );
-  host.append(node);
-  setTimeout(() => node.classList.add("leaving"), ms);
-  setTimeout(() => node.remove(), ms + 400);
-}
+export { toast } from "./lux-toast.mjs";
 
 /** Promise-based modal dialog. Resolves with true (confirm) or false. */
 export function confirmDialog({ title, body, confirm = "확인", cancel = "취소", danger = false }) {
@@ -205,29 +194,7 @@ export function select(options, value, attrs = {}) {
   return s;
 }
 
-export function segmented(options, value, onChange) {
-  const wrap = h("div", { class: "segmented", role: "radiogroup" });
-  const render = () => {
-    wrap.replaceChildren(
-      ...options.map(([id, label]) =>
-        h("button", {
-          type: "button",
-          role: "radio",
-          class: id === value ? "active" : "",
-          "aria-checked": String(id === value),
-          text: label,
-          onclick: () => {
-            value = id;
-            render();
-            onChange(id);
-          },
-        }),
-      ),
-    );
-  };
-  render();
-  return wrap;
-}
+export { segmented } from "./lux-tabs.mjs";
 
 export const chip = (text, kind = "") => h("span", { class: ["chip", kind && "chip-" + kind], text });
 

@@ -1,5 +1,7 @@
 import { h, icon, card, chip, progress, empty, fmtDate, fmtClock } from "./dom.mjs";
 import { api, loadLibrary } from "./api.mjs";
+import { scoreBars } from "./lux-bars.mjs";
+import { studyHeatmap } from "./lux-heat.mjs";
 import { EXAMS } from "../lib/exams.mjs";
 import {
   progressOf,
@@ -93,46 +95,75 @@ export async function render(page, { go }) {
     stat("복습할 오답", open, "문항", "#/notebook"),
   );
 
+  const shortDate = (ms) =>
+    new Date(ms)
+      .toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })
+      .replace(/\.\s?/g, "/")
+      .replace(/\/$/, "");
+  const setOf = (button, title, list) => {
+    const last = list.slice(-12);
+    return {
+      button,
+      title: `${title} 최근 ${last.length}회 평균`,
+      prefix: "첫 회 대비",
+      labels: last.map((r) => shortDate(r.a.submittedAt)),
+      full: last.map((r) => `${r.e.title} · ${fmtDate(r.a.submittedAt)}`),
+      values: last.map((r) => r.p),
+      rows: last,
+    };
+  };
+  const sets = [
+    setOf("전체", "전체", results),
+    setOf(
+      "토익",
+      "TOEIC",
+      results.filter((r) => r.e.exam === "toeic"),
+    ),
+    setOf(
+      "필기",
+      "객관식",
+      results.filter((r) => r.e.exam === "cbt"),
+    ),
+  ];
   const chart = card(
     { class: "trend" },
     h(
       "div",
       { class: "card-head" },
       h("h2", { text: "최근 성적" }),
-      h("small", { class: "muted", text: "원점수 정답률 · 공식 환산 점수 아님" }),
+      h("small", { class: "muted", text: "정답률 · 막대를 두 번 누르면 복습 열기" }),
     ),
     results.length
-      ? h(
-          "div",
-          { class: "bars" },
-          ...results.slice(-10).map((r) => {
-            const col = h(
-              "a",
-              {
-                class: "bar-col",
-                href: `#/review/${r.e.id}/${r.a.id}`,
-                title: `${r.e.title} · ${fmtDate(r.a.submittedAt)}`,
-              },
-              h("span", { class: "bar-val", text: Math.round(r.p) }),
-            );
-            const fill = h("i");
-            fill.style.height = Math.max(4, r.p) + "%";
-            col.append(fill);
-            col.append(
-              h("small", {
-                text: new Date(r.a.submittedAt).toLocaleDateString("ko-KR", {
-                  month: "numeric",
-                  day: "numeric",
-                }),
-              }),
-            );
-            return col;
-          }),
-        )
+      ? scoreBars(sets, {
+          onOpen: (k, j) => {
+            const r = sets[k].rows[j];
+            if (r) go(`review/${r.e.id}/${r.a.id}`);
+          },
+        })
       : h("p", {
           class: "muted",
           text: "아직 채점된 응시가 없어요. 첫 회차를 끝내면 추이가 여기에 쌓입니다.",
         }),
+  );
+
+  const days = new Map();
+  for (const r of results) {
+    const d = new Date(r.a.submittedAt);
+    const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    days.set(k, (days.get(k) ?? 0) + Object.keys(r.a.marks ?? {}).length);
+  }
+  const activity = card(
+    {},
+    h(
+      "div",
+      { class: "card-head" },
+      h("h2", { text: "학습 기록" }),
+      h("small", {
+        class: "muted",
+        text: `최근 12주 · 푼 문항 ${[...days.values()].reduce((a, b) => a + b, 0)}개`,
+      }),
+    ),
+    studyHeatmap(days),
   );
 
   const working = card(
@@ -168,7 +199,7 @@ export async function render(page, { go }) {
     h(
       "div",
       { class: "grid-2" },
-      chart,
+      h("div", { class: "stack" }, chart, activity),
       h(
         "div",
         { class: "stack" },

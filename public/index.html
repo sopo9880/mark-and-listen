@@ -6,7 +6,9 @@
     <meta name="color-scheme" content="light dark" />
     <title>Mark &amp; Listen</title>
     <link rel="icon" href="/logo.png" />
+    <link rel="stylesheet" href="/lucian.css" />
     <link rel="stylesheet" href="/styles.css" />
+    <script src="/theme-boot.mjs"></script>
   </head>
   <body>
     <div class="shell">
@@ -18,10 +20,10 @@
         <nav id="nav"></nav>
         <div id="job" class="job" hidden></div>
         <div id="connections" class="connections" aria-live="polite"></div>
+        <div id="theme" class="theme-slot"></div>
       </aside>
       <main id="main" tabindex="-1"></main>
     </div>
-    <div id="toasts" class="toasts"></div>
     <script type="module" src="/app.mjs"></script>
   </body>
 </html>
