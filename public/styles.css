@@ -2017,3 +2017,45 @@ body.focus-mode .sidebar {
 .check-item .diff {
   margin-top: 10px;
 }
+
+.dev-log {
+  margin-top: 18px;
+}
+.dev-log .card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.dev-log .grow {
+  flex: 1;
+}
+.dev-log-out {
+  margin: 0;
+  height: 340px;
+  resize: vertical;
+  overflow: auto;
+  background: #0f1115;
+  color: #c9d1d9;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font:
+    12.5px/1.5 "Cascadia Mono",
+    Consolas,
+    ui-monospace,
+    monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.dev-log-out .lv-ok {
+  color: #3fb950;
+}
+.dev-log-out .lv-error {
+  color: #ff7b72;
+}
+.dev-log-out .lv-live {
+  color: #d2a8ff;
+}
+.dev-log-out .lv-info {
+  color: #79c0ff;
+}

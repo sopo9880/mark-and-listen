@@ -34,8 +34,8 @@ function scriptText(prompt, first) {
 }
 
 class LiveSession {
-  constructor({ modelId, voice, key, webSocketFactory, onClose, limits }) {
-    Object.assign(this, { modelId, voice, key, webSocketFactory, onClose, limits });
+  constructor({ modelId, voice, key, webSocketFactory, onClose, limits, onEvent }) {
+    Object.assign(this, { modelId, voice, key, webSocketFactory, onClose, limits, onEvent });
     this.turns = 0;
     this.openedAt = 0;
     this.closed = false;
@@ -103,10 +103,14 @@ class LiveSession {
         } catch {
           return this.fault(new Error("Gemini Live returned an unreadable message."));
         }
-        if (message.error) return this.fault(errorOf(message.error), fail);
+        if (message.error) {
+          this.onEvent?.(`서버 오류 ${JSON.stringify(message.error).slice(0, 300)}`);
+          return this.fault(errorOf(message.error), fail);
+        }
         if (message.setupComplete && !this.openedAt) {
           clearTimeout(timer);
           this.openedAt = Date.now();
+          this.onEvent?.(`세션 열림 ${this.modelId} · ${this.voice}`);
           resolve();
           return;
         }
@@ -120,6 +124,10 @@ class LiveSession {
         ),
       );
       socket.addEventListener("close", (event) => {
+        if (!this.closed)
+          this.onEvent?.(
+            `서버가 연결 종료 (code ${event?.code ?? "?"}${event?.reason ? " " + event.reason : ""}) · ${this.voice}`,
+          );
         const error =
           event?.code === 1013
             ? rateLimitError()
@@ -140,6 +148,7 @@ class LiveSession {
   close() {
     if (this.closed) return;
     this.closed = true;
+    this.onEvent?.(`세션 닫힘 · ${this.voice} (${this.turns}문장)`);
     clearTimeout(this.idle);
     try {
       this.socket?.close();
@@ -207,6 +216,7 @@ class LiveSession {
             if (content.turnComplete) {
               if (!size) {
                 // Some models answer one input style with silence: try the other style on the next take.
+                this.onEvent?.(`음성 없이 턴 종료 (${this.mode} 입력) · ${this.voice}`);
                 if (!this.modeKnown) this.mode = this.mode === "turn" ? "realtime" : "turn";
                 done(new Error("Gemini Live returned no complete PCM audio."));
                 return;
@@ -274,6 +284,7 @@ function errorOf(error) {
 }
 
 export function createGeminiLivePool({
+  onEvent,
   webSocketFactory = defaultWebSocketFactory,
   maxTurns = 40,
   maxAgeMs = 8 * 60_000, // below the Live API's session limit
@@ -304,11 +315,23 @@ export function createGeminiLivePool({
           key,
           webSocketFactory,
           limits,
+          onEvent,
           onClose: (s) => sessions.get(id) === s && sessions.delete(id),
         });
         sessions.set(id, session);
       }
-      return session.speak(prompt, signal);
+      try {
+        return await session.speak(prompt, signal);
+      } catch (error) {
+        // A silent first take with an untested input style: retry once right away with the other style.
+        if (/no complete PCM/.test(error?.message ?? "") && !session.modeKnown && !session.closed) {
+          onEvent?.(`입력 방식을 ${session.mode}(으)로 바꿔 다시 시도`);
+          const result = await session.speak(prompt, signal);
+          session.modeKnown = true;
+          return result;
+        }
+        throw error;
+      }
     },
     closeAll() {
       for (const s of [...sessions.values()]) s.close();

@@ -67,6 +67,7 @@ const ICONS = {
   wand: "M4 20 16 8M14 4v3M19 9h-3M18 5l-2 2M12 6l2 2",
   eye: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
   more: "M5 12h.01M12 12h.01M19 12h.01",
+  terminal: "M4 5h16v14H4zM7 9l3 3-3 3M12 15h5",
 };
 
 export function icon(name, size = 18) {

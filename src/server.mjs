@@ -246,8 +246,20 @@ export async function buildServer({
       updateBusy = false;
     }
   };
+  // Developer log (shown under Settings in test builds). Keys are masked; unlimited in test mode.
+  const logs = [];
+  const log = (level, message) => {
+    let text = String(message ?? "");
+    for (const k of Object.values(keys))
+      if (typeof k === "string" && k.length >= 8) text = text.split(k).join("***");
+    logs.push({ t: Date.now(), level, text: text.slice(0, 4000) });
+    if (!testMode && logs.length > 500) logs.splice(0, logs.length - 500);
+  };
+  const errText = (err) =>
+    [err?.status && `HTTP ${err.status}`, err?.code, err?.message ?? String(err)].filter(Boolean).join(" · ");
   // Gemini narration reuses open Live sessions (one per model and voice) across segments.
-  const geminiPool = live ? null : createGeminiLivePool();
+  const geminiPool = live ? null : createGeminiLivePool({ onEvent: (m) => log("live", m) });
+  let lastVoice = null; // narration is produced voice by voice: stay with this voice while it has lines left
   const speak =
     live ?? ((args) => (args.provider === "gemini" ? geminiPool.speak(args) : auditionWithOpenAILive(args)));
   const getKey = (p) => keys[p] || process.env[p === "gemini" ? "GEMINI_API_KEY" : "OPENAI_API_KEY"];
@@ -350,6 +362,14 @@ export async function buildServer({
       const path = new URL(req.url, "http://localhost").pathname;
       if (req.method === "GET" && path === "/api/session") {
         send(res, { token, build: VERSION, testMode, ...(smoke ? { smoke: true } : {}) });
+        return;
+      }
+      if (testMode && req.method === "GET" && path === "/api/logs") {
+        const since = Math.max(
+          0,
+          Number(new URL(req.url, "http://localhost").searchParams.get("since")) || 0,
+        );
+        send(res, { from: since, count: logs.length, lines: logs.slice(since, since + 5000) });
         return;
       }
       if (smoke && req.method === "GET" && path === "/api/smoke") {
@@ -824,14 +844,17 @@ export async function buildServer({
                 } else if (e.fixed || b.fixed === true) {
                   Object.assign(g, fixedGroup(g));
                 } else {
+                  log("info", `문항 생성 ${g.id} (시도 ${g.tries})`);
                   const parsed = parseGroup(await textCall(groupPrompt(e, g)), g, e);
                   const check = checkAnswers(await textCall(solvePrompt(e, parsed)), parsed);
                   if (!check.ok) throw Object.assign(Error(check.reason), { verify: true });
                   Object.assign(g, parsed);
                 }
                 Object.assign(g, { verified: true, error: null });
+                log("ok", `문항 ${g.id} 검증 통과`);
                 await store.write(e);
               } catch (err) {
+                log("error", `문항 ${g.id} 실패: ${errText(err)}`);
                 if (err.status === 400 || err.status === 429) {
                   g.tries -= 1;
                   g.error = err.message;
@@ -873,15 +896,18 @@ export async function buildServer({
               return;
             }
             let s;
-            for (const group of e.groups.filter((x) => isAudioGroup(e, x) && x.status === "ready")) {
-              const candidate = group.segments.find((x) =>
-                b.retrySegment ? x.id === b.retrySegment : x.status !== "ready" && x.status !== "failed",
-              );
-              if (candidate) {
-                g = group;
-                s = candidate;
-                break;
-              }
+            // Voice by voice: every line of one voice is read before the next voice starts, so each voice
+            // needs about one Live session. The episode is still assembled in question order.
+            const provider = settings.liveProvider || "gemini";
+            const todo = [];
+            for (const group of e.groups.filter((x) => isAudioGroup(e, x) && x.status === "ready"))
+              for (const x of group.segments)
+                if (b.retrySegment ? x.id === b.retrySegment : x.status !== "ready" && x.status !== "failed")
+                  todo.push({ group, x, voice: voiceFor(provider, e, group, x) });
+            const pickNext = todo.find((t) => t.voice === lastVoice) ?? todo[0];
+            if (pickNext) {
+              g = pickNext.group;
+              s = pickNext.x;
             }
             if (!s) {
               send(res, { episode: e, more: false });
@@ -890,6 +916,10 @@ export async function buildServer({
             try {
               const args = await liveArgs();
               const voice = voiceFor(args.provider, e, g, s);
+              if (voice !== lastVoice)
+                log("info", `목소리 ${voice} 차례 (${todo.filter((t) => t.voice === voice).length}개 문장)`);
+              lastVoice = voice;
+              log("info", `음원 ${s.id} · ${voice} · ${args.model} · "${s.text.slice(0, 80)}"`);
               const result = await verifiedNarration(
                 speak,
                 { ...args, prompt: s.text, voice, signal },
@@ -908,7 +938,13 @@ export async function buildServer({
               });
               delete s.lastTake;
               await store.write(e);
+              log("ok", `음원 ${s.id} 완료 (${result.attempts}회, ${s.duration?.toFixed?.(2)}s)`);
             } catch (err) {
+              log(
+                "error",
+                `음원 ${s.id} 실패: ${errText(err)}` +
+                  (err.last ? ` · 들린 말: "${String(err.last.transcript ?? "").slice(0, 200)}"` : ""),
+              );
               if (err.status === 400) throw err;
               const limited = err.status === 429 || err.code === "GEMINI_LIVE_RATE_LIMIT";
               // A quota stop is not the segment's fault: it stays pending and is picked up on the next run.
@@ -955,6 +991,7 @@ export async function buildServer({
       }[extname(name)];
       await stream(req, res, join(PUBLIC, name), type);
     } catch (e) {
+      if (!e.status || e.status >= 500) log("error", `${req.method} ${req.url}: ${errText(e)}`);
       if (!res.destroyed && !res.headersSent)
         send(
           res,

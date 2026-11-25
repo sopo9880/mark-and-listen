@@ -327,7 +327,7 @@ export async function render(page, { go }) {
     head("book", "데이터와 개인정보", ""),
     h("p", {
       class: "muted small",
-      text: "회차·음원·사진·응시 기록은 이 PC의 사용자 데이터 폴더에만 저장됩니다. API 키는 파일에 저장하지 않으며, AI 호출은 생성·낭독 버튼을 눌렀을 때만 일어납니다. 완성된 회차의 응시와 채점은 인터넷 없이 동작합니다.",
+      text: "회차·음원·사진·응시 기록은 이 PC의 사용자 데이터 폴더에만 저장됩니다. API 키는 이 PC 사용자 계정으로 암호화해 저장하며, AI 호출은 생성·낭독 버튼을 눌렀을 때만 일어납니다. 완성된 회차의 응시와 채점은 인터넷 없이 동작합니다.",
     }),
     settings.dataRoot
       ? h("div", { class: "kv" }, h("span", { text: "저장 위치" }), h("code", { text: settings.dataRoot }))
@@ -347,7 +347,99 @@ export async function render(page, { go }) {
       h("div", { class: "stack" }, appearance, live, update, about),
     ),
   );
-  return () => disposeUrl();
+  let disposeLog = () => {};
+  if (state.testMode) {
+    const devLog = logPanel();
+    page.append(devLog.el);
+    disposeLog = devLog.dispose;
+  }
+  return () => {
+    disposeUrl();
+    disposeLog();
+  };
+}
+
+/** Test builds only: every server event (generation, Live sessions, errors) without a line limit. */
+function logPanel() {
+  let seen = 0,
+    busy = false,
+    alive = true;
+  const out = h("pre", { class: "dev-log-out" });
+  const follow = h("input", { type: "checkbox", checked: true });
+  const status = h("span", { class: "muted small", text: "연결 중…" });
+  const time = (t) => {
+    const d = new Date(t);
+    return [d.getHours(), d.getMinutes(), d.getSeconds()].map((n) => String(n).padStart(2, "0")).join(":");
+  };
+  const pull = async () => {
+    if (busy || !alive) return;
+    busy = true;
+    try {
+      for (;;) {
+        const r = await api(`logs?since=${seen}`);
+        if (r.count < seen) {
+          seen = 0;
+          out.replaceChildren();
+          continue;
+        }
+        if (r.lines.length) {
+          const frag = document.createDocumentFragment();
+          for (const l of r.lines)
+            frag.append(
+              h("span", {
+                class: "lv-" + l.level,
+                text: `${time(l.t)}  ${l.level.padEnd(5)}  ${l.text.replace(/\n/g, " ⏎ ")}\n`,
+              }),
+            );
+          out.append(frag);
+          seen = r.from + r.lines.length;
+          if (follow.checked) out.scrollTop = out.scrollHeight;
+        }
+        status.textContent = `${r.count}줄`;
+        if (seen >= r.count) break;
+      }
+    } catch (e) {
+      status.textContent = "로그를 읽지 못했습니다: " + e.message;
+    } finally {
+      busy = false;
+    }
+  };
+  out.addEventListener("scroll", () => {
+    follow.checked = out.scrollTop + out.clientHeight >= out.scrollHeight - 8;
+  });
+  const timer = setInterval(pull, 1000);
+  void pull();
+  const el = card(
+    { class: "dev-log" },
+    h(
+      "div",
+      { class: "card-head" },
+      h("h2", {}, icon("terminal", 18), " 개발 로그"),
+      h("span", { class: "grow" }),
+      status,
+      h("label", { class: "row small" }, follow, " 자동 스크롤"),
+      button(
+        "복사",
+        () => navigator.clipboard?.writeText(out.textContent).then(() => toast("로그를 복사했습니다.")),
+        {
+          small: true,
+        },
+      ),
+      button("화면 지우기", () => out.replaceChildren(), { small: true }),
+    ),
+    h("p", {
+      class: "muted small",
+      text: "테스트 빌드에서만 보입니다. 문항 생성, Live 세션 열림·닫힘, 음원별 결과와 오류 원문이 줄 수 제한 없이 쌓입니다. API 키는 ***로 가려집니다.",
+    }),
+    out,
+  );
+  return {
+    el,
+    dispose: () => {
+      alive = false;
+      clearInterval(timer);
+    },
+  };
 }
 
 function head(ic, title, sub) {

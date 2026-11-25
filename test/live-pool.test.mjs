@@ -76,12 +76,15 @@ test("sessions renew after the turn limit and after a dropped connection", async
 });
 
 test("a model that stays silent for one input style is retried with the other", async () => {
-  const { factory } = server({ silentFor: (m) => !!m.realtimeInput });
-  const pool = createGeminiLivePool({ webSocketFactory: factory });
+  const { sockets, factory } = server({ silentFor: (m) => !!m.realtimeInput });
+  const events = [];
+  const pool = createGeminiLivePool({ webSocketFactory: factory, onEvent: (m) => events.push(m) });
   const old = { ...args, model: "gemini-2.5-flash-native-audio-preview-12-2025" };
-  await assert.rejects(pool.speak({ ...old, prompt: "Number one." }), /no complete PCM/);
-  const r = await pool.speak({ ...old, prompt: "Number one." });
-  assert.equal(r.transcript, "Number one.");
+  assert.equal((await pool.speak({ ...old, prompt: "Number one." })).transcript, "Number one.");
+  assert.equal((await pool.speak({ ...old, prompt: "Number two." })).transcript, "Number two.");
+  const sent = sockets[0].sent.filter((m) => !m.setup);
+  assert.ok(sent[0].realtimeInput && sent[1].clientContent && sent[2].clientContent);
+  assert.ok(events.some((m) => /음성 없이/.test(m)));
   pool.closeAll();
 });
 
