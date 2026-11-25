@@ -1417,7 +1417,7 @@ body.focus-mode .sidebar {
   padding: 0;
   gap: 0;
   height: 100vh;
-  grid-template-rows: auto auto 1fr;
+  grid-template-rows: auto auto minmax(0, 1fr);
 }
 .exam-bar {
   display: grid;
@@ -1454,6 +1454,7 @@ body.focus-mode .sidebar {
 }
 .exam-clock {
   display: grid;
+  justify-content: center;
   grid-template-columns: auto auto;
   align-items: center;
   column-gap: 8px;
@@ -1504,6 +1505,7 @@ body.focus-mode .sidebar {
   display: none;
 }
 .exam-body {
+  grid-row: 3;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
   min-height: 0;
