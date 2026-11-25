@@ -70,10 +70,18 @@ test("Part 3 preserves alternating speakers and question prompts; full LC includ
   for (const g of e.groups.filter((g) => g.part === 3)) {
     assert.ok(new Set(g.segments.map((s) => s.speaker)).size >= 2);
     assert.equal(g.questions.length, 3);
+    // The narrator reads the set introduction first and "Number N. <question>" after the conversation.
+    assert.match(
+      g.segments[0].text,
+      /^Questions [a-z-]+ through [a-z-]+ refer to the following conversation\.$/,
+    );
+    assert.equal(g.segments[0].speaker, "narrator");
     assert.deepEqual(
-      g.segments.slice(-3).map((s) => s.text),
+      g.segments.slice(-3).map((s) => s.text.replace(/^Number [a-z-]+\. /, "")),
       g.questions.map((q) => q.question),
     );
+    assert.ok(g.segments.slice(-3).every((s) => s.speaker === "narrator" && s.role === "question"));
+    assert.ok(g.segments.slice(1, -3).every((s) => s.speaker !== "narrator"));
   }
   for (const g of e.groups) {
     g.reviewed = true;
@@ -176,7 +184,9 @@ test("server preserves success after quota, retries only failed segment, never m
   const mock = async ({ prompt, provider, voice }) => {
     assert.equal(offline, false);
     assert.equal(provider, "gemini");
-    assert.ok(["Kore", "Aoede", "Leda", "Zephyr", "Puck", "Charon", "Orus", "Fenrir"].includes(voice));
+    assert.ok(
+      ["Kore", "Aoede", "Leda", "Zephyr", "Puck", "Iapetus", "Orus", "Fenrir", "Charon"].includes(voice),
+    );
     calls++;
     if (fail) throw Object.assign(Error("SECRET-MUST-NOT-LEAK"), { status: 429 });
     return { wav: wav(), transcript: prompt };
@@ -225,8 +235,9 @@ test("server preserves success after quota, retries only failed segment, never m
   assert.equal(failure.status, 429);
   assert.equal(JSON.stringify(failure).includes("SECRET"), false);
   let saved = await store.read(e.id);
+  // Part 2 items are two segments (question voice, response voice); only the failed one stays pending.
   assert.equal(saved.groups[0].segments[0].status, "ready");
-  assert.equal(saved.groups[1].segments[0].status, "pending");
+  assert.equal(saved.groups[0].segments[1].status, "pending");
   // Reopen process: successful fragments and saved API keys survive.
   server.closeAllConnections();
   await new Promise((r) => server.close(r));
@@ -257,8 +268,8 @@ test("server preserves success after quota, retries only failed segment, never m
   assert.equal(prefs.keys.gemini, true);
   await p2("settings", { keyProvider: "gemini", apiKey: "MOCK-KEY" });
   await p2("models", { provider: "gemini" });
-  for (let i = 0; i < 3; i++) await p2("produce", { id: e.id });
-  assert.equal(calls, 3);
+  for (let i = 0; i < 4; i++) await p2("produce", { id: e.id });
+  assert.equal(calls, 5);
   saved = await store.read(e.id);
   for (const g of saved.groups) {
     await p2("review", { id: e.id, groupId: g.id, segments: "verified", approved: true });

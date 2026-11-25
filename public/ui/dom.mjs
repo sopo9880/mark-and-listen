@@ -196,6 +196,23 @@ export function select(options, value, attrs = {}) {
 
 export { segmented } from "./lux-tabs.mjs";
 
+/** A generated Part 3/4 graphic (schedule, price list, …) as a small table: first row is the header. */
+export function graphicTable(t, small = false) {
+  if (!t?.rows?.length) return null;
+  const [head, ...rows] = t.rows;
+  return h(
+    "figure",
+    { class: ["graphic", small && "small"] },
+    h("figcaption", { text: t.title }),
+    h(
+      "table",
+      {},
+      h("thead", {}, h("tr", {}, ...head.map((c) => h("th", { text: c })))),
+      h("tbody", {}, ...rows.map((r) => h("tr", {}, ...r.map((c) => h("td", { text: c }))))),
+    ),
+  );
+}
+
 export const chip = (text, kind = "") => h("span", { class: ["chip", kind && "chip-" + kind], text });
 
 export function progress(value, max, kind = "") {

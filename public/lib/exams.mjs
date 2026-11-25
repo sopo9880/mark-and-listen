@@ -224,6 +224,33 @@ export function phaseDurations(e) {
 /** Pauses used both by the exam player and by the joined listening file (seconds). */
 export const GAPS = { turn: 0.35, cue: 0.6, part12: 5, part34: 8, directions: 1.5 };
 
+/** Question numbers after which a full listening section says "turn to the next page" (real test book pages). */
+export const NEXT_PAGE_AFTER = new Set([2, 6, 43, 64, 82]);
+
+const ONES =
+  "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen".split(
+    " ",
+  );
+const TENS_WORDS = "_ _ twenty thirty forty fifty sixty seventy eighty ninety".split(" ");
+/** 1–100 as spoken English ("thirty-two"), so narration can be checked word by word. */
+export function numberWords(n) {
+  if (n === 100) return "one hundred";
+  if (n < 20) return ONES[n];
+  return TENS_WORDS[Math.floor(n / 10)] + (n % 10 ? "-" + ONES[n % 10] : "");
+}
+
+/** Number of the group's first question as the exam screen shows it (episode order). */
+export function firstNumberOf(e, g) {
+  let n = 1;
+  for (const x of e?.groups ?? []) {
+    if (x.id === g.id) return n;
+    n += x.count;
+  }
+  // A group parsed on its own: standard TOEIC numbering.
+  const i = Number(String(g.id).split("-")[1]) - 1;
+  return { 1: 1 + i, 2: 7 + i, 3: 32 + 3 * i, 4: 71 + 3 * i }[g.part] ?? 1;
+}
+
 /** Episodes with exactly the 100 TOEIC listening questions get directions and question-number cues. */
 export const isFullListening = (e) => {
   if (e.exam !== "toeic") return false;
@@ -273,9 +300,34 @@ export function audioTimeline(e) {
     }
     if (g.part !== lastPart) {
       cue(`p${g.part}-directions`, GAPS.directions);
+      if (g.part === 1) cue("p1-begin", GAPS.directions);
       lastPart = g.part;
     }
     const segs = g.segments ?? [];
+    if (segs.some((s) => s.role)) {
+      // Real-test order. Part 1–2: fixed number cue, then the item (Part 2: question voice, then response voice).
+      // Part 3–4: the narrator reads the set introduction and "Number N. <question>" as episode segments.
+      segs.forEach((s, i) => {
+        const n = number + 1 + (s.q ?? 0);
+        if (s.role === "prompt" || (g.part === 1 && s.role === "choices")) cue(`num-${n}`, GAPS.cue, g.id);
+        const next = segs[i + 1];
+        const gap =
+          s.role === "intro" || s.role === "prompt"
+            ? GAPS.cue
+            : s.role === "turn"
+              ? next?.role === "turn"
+                ? GAPS.turn
+                : GAPS.directions
+              : g.part <= 2
+                ? GAPS.part12
+                : GAPS.part34;
+        add({ ...s, kind: "segment", groupId: g.id }, s.duration ?? 0, gap);
+        const answered = s.role === "question" || s.role === "choices";
+        if (answered && NEXT_PAGE_AFTER.has(n)) cue("next-page", GAPS.directions, g.id);
+      });
+      number += g.count;
+      continue;
+    }
     const onePerQuestion = g.part <= 2 && segs.length === g.count;
     const firstQuestion = g.part >= 3 ? Math.max(0, segs.length - g.count) : 0;
     if (g.part >= 3) cue(`intro-${number + 1}-${number + g.count}`, GAPS.cue, g.id);

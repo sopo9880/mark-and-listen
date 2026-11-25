@@ -1171,6 +1171,40 @@ a.hall:hover {
 .figure.small {
   max-width: 320px;
 }
+.graphic {
+  margin: 0;
+  max-width: min(100%, 520px);
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px var(--line);
+  background: var(--surface-1, #fff);
+  overflow: hidden;
+}
+.graphic.small {
+  max-width: 320px;
+  font-size: 0.9em;
+}
+.graphic figcaption {
+  font-weight: 700;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.graphic table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.graphic th,
+.graphic td {
+  text-align: left;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.graphic th {
+  background: var(--surface-2);
+  font-weight: 600;
+}
+.graphic tr:last-child td {
+  border-bottom: 0;
+}
 .passage {
   background: var(--surface-2);
   box-shadow: 0 0 0 1px var(--line);

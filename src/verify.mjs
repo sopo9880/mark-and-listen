@@ -7,7 +7,7 @@ export function solvePrompt(e, g) {
   const material = [];
   for (const p of g.passages ?? []) material.push(`[Document: ${p.title}]\n${p.body}`);
   const transcript = (g.segments ?? [])
-    .filter((s) => s.speaker !== "narrator")
+    .filter((s) => (s.role ? s.role === "turn" : s.speaker !== "narrator"))
     .map((s) => `${s.speaker}: ${s.text}`)
     .join("\n");
   if (transcript) material.push(`[Audio transcript]\n${transcript}`);

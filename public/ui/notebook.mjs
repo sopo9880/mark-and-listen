@@ -1,4 +1,4 @@
-import { h, icon, card, chip, button, segmented, empty, fmtDate } from "./dom.mjs";
+import { h, icon, card, chip, button, segmented, empty, fmtDate, graphicTable } from "./dom.mjs";
 import { api, loadLibrary } from "./api.mjs";
 import { partLabel, isAudioGroup } from "../lib/exams.mjs";
 import { choiceMark, examName } from "./model.mjs";
@@ -109,6 +109,7 @@ export async function render(page) {
             alt: g.imageAlt || g.graphicAlt || "",
           })
         : null,
+      graphicTable(g.table, true),
       ...(g.passages ?? []).map((p) =>
         h(
           "details",

@@ -1,4 +1,4 @@
-import { h, icon, card, chip, progress, segmented, fmtDate, fmtClock } from "./dom.mjs";
+import { h, icon, card, chip, progress, segmented, fmtDate, fmtClock, graphicTable } from "./dom.mjs";
 import { api, loadEpisode } from "./api.mjs";
 import { examOf, partLabel, isAudioGroup } from "../lib/exams.mjs";
 import { advanceAttempt } from "../lib/attempt.mjs";
@@ -137,6 +137,7 @@ export async function render(page, { params }) {
         block.append(
           h("img", { class: "figure", src: g.image || g.graphic, alt: g.imageAlt || g.graphicAlt || "" }),
         );
+      if (g.table) block.append(graphicTable(g.table));
       for (const p of g.passages ?? [])
         block.append(
           h(

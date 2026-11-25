@@ -1,20 +1,84 @@
 // Prompt construction and strict parsing of AI-generated question groups, per exam hall.
 import { LC_LAYOUT } from "../public/lib/toeic-fixed.mjs";
-import { LETTERS, partsOf, sectionOf, isAudioGroup } from "../public/lib/exams.mjs";
+import {
+  LETTERS,
+  partsOf,
+  sectionOf,
+  isAudioGroup,
+  numberWords,
+  firstNumberOf,
+} from "../public/lib/exams.mjs";
 
 const text = (v, n = 5000) => typeof v === "string" && v.trim().length > 0 && v.length <= n;
 const illustrationFor = (g) =>
   g.part === 1 ? LC_LAYOUT.filter((x) => x.part === 1)[(Number(g.id.split("-")[1]) - 1) % 6] : null;
 
+const pick = (list) => list[Math.floor(Math.random() * list.length)];
+const P3_GRAPHICS = ["table", "price list", "schedule", "floor directory", "coupon", "order form", "list"];
+const P4_KINDS = [
+  "advertisement",
+  "excerpt from a meeting",
+  "talk",
+  "announcement",
+  "telephone message",
+  "broadcast",
+  "news report",
+  "tour information",
+  "introduction",
+  "recorded message",
+  "excerpt from a workshop",
+];
+const P4_GRAPHICS = ["schedule", "weather forecast", "program", "price list", "table", "agenda"];
+
+/** Real-test layout of a Part 3/4 set by its position: 3 speakers, graphic sets, implied-meaning questions. */
+export function setPlan(g) {
+  const n = Number(String(g.id).split("-")[1]);
+  if (g.part === 3)
+    return {
+      threeSpeakers: n === 6 || n === 9,
+      graphic: n >= 11 ? pick(P3_GRAPHICS) : null,
+      implied: n === 5 || n === 8,
+      kind: n === 6 || n === 9 ? "conversation with three speakers" : "conversation",
+    };
+  if (g.part === 4) {
+    const graphic = n >= 9 ? pick(P4_GRAPHICS) : null;
+    return { threeSpeakers: false, graphic, implied: n === 2 || n === 3 || n === 5, kind: pick(P4_KINDS) };
+  }
+  return {};
+}
+
+function setRules(g) {
+  if (g.part !== 3 && g.part !== 4) return "";
+  const plan = setPlan(g);
+  return [
+    `Return "setType": a short lowercase phrase naming this set as in "Questions … refer to the following <setType>." Use "${plan.kind}${plan.graphic ? " and " + plan.graphic : ""}".`,
+    g.part === 3
+      ? plan.threeSpeakers
+        ? "Use exactly three speakers A, B and C (two of them the same gender is fine)."
+        : "Use two speakers A and B, one man and one woman."
+      : `One speaker (A) gives a ${plan.kind}.`,
+    plan.graphic
+      ? `This set has a graphic: return "graphic":{"title":"...","rows":[["header","header"],["cell","cell"]]} — a ${plan.graphic} of 3 to 7 rows and 2 to 4 columns, short cells. Exactly one question starts with "Look at the graphic." and needs both the audio and the graphic to answer.`
+      : "",
+    plan.implied
+      ? 'One question asks what a speaker means/implies when he or she says "<exact short quote from the script>"; the quote must appear word for word in the turns.'
+      : "",
+    'Refer to speakers as "the man", "the woman", "the speaker" or by name, as in the real test.',
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 function toeicPrompt(g) {
   const image = illustrationFor(g);
   return [
     `Create original TOEIC-style Part ${g.part} material, exactly ${g.count} questions. JSON only, no tools.`,
-    `Schema: {"passages":[{"title":"...","body":"..."}],"turns":[{"speaker":"A","text":"spoken text"}],"questions":[{"question":"...","choices":["..."],"answer":0,"explanation":"한국어 해설"}]}.`,
+    `Schema: {"passages":[{"title":"...","body":"..."}],"turns":[{"speaker":"A","text":"spoken text"}],"questions":[{"question":"...","choices":["..."],"answer":0,"explanation":"한국어 해설"}]${g.part === 3 || g.part === 4 ? ',"setType":"..."' : ""}}.`,
     `Each question has ${g.part === 2 ? 3 : 4} distinct choices, one zero-based answer, Korean explanation. Place the correct answer at a random index.`,
     g.part <= 4
       ? "Listening: turns contain ONLY conversation/announcement, not questions, options, answers. Part 3 has 3–10 alternating A/B turns (a third speaker C is allowed). Part 4 narrator turns. Part 1/2 turns empty. In every spoken text (turns, Part 1/2 choices, Part 2-4 questions) write numbers, prices, times, dates and percentages in words (e.g. 'nine thirty', 'fifteen dollars', 'the third floor') so narration can be checked word by word."
       : "Reading: turns empty.",
+    setRules(g),
     g.part === 6
       ? "One coherent passage with exactly four blanks numbered [1] to [4], including sentence insertion."
       : g.part === 7
@@ -131,16 +195,37 @@ export function parseGroup(raw, g, e = { exam: "toeic" }) {
   if (g.part === 3 && (turns.length < 3 || new Set(turns.map((t) => t.speaker)).size < 2))
     throw Error("Part 3 화자 전환 누락");
   if (g.part === 4 && !turns.length) throw Error("Part 4 대본 누락");
+  let extra = {};
+  if (g.part === 3 || g.part === 4) extra = setExtras(d, g, turns, questions);
   if (g.part <= 2) turns = [];
-  if (isAudioGroup(e, g))
-    questions.forEach((q) => {
-      // Part 1/2: the prompt (Part 2) and all lettered choices form one segment, so one Live request covers a question.
-      const choices = q.choices.map((c, i) => `${LETTERS[i]}. ${c}`).join("\n");
-      if (g.part === 1) turns.push({ speaker: "narrator", text: choices });
-      else if (g.part === 2) turns.push({ speaker: "narrator", text: `${q.question}\n${choices}` });
-      else turns.push({ speaker: "narrator", text: q.question });
+  if (g.part === 4) turns = turns.map((t) => ({ ...t, speaker: "A" })); // one talker; the narrator reads intro and questions
+  turns = turns.map((t) => ({ ...t, role: "turn" }));
+  if (isAudioGroup(e, g)) {
+    // Real-test voices: Part 1 statements by one speaker; Part 2 question by one speaker and the responses by
+    // another; Part 3–4 set introduction and "Number N. <question>" by the fixed narrator.
+    const first = firstNumberOf(e, g);
+    if (g.part >= 3)
+      turns.unshift({
+        speaker: "narrator",
+        role: "intro",
+        text: `Questions ${numberWords(first)} through ${numberWords(first + g.count - 1)} refer to the following ${extra.setType ?? (g.part === 3 ? "conversation" : "talk")}.`,
+      });
+    questions.forEach((q, i) => {
+      const choices = q.choices.map((c, k) => `${LETTERS[k]}. ${c}`).join("\n");
+      if (g.part === 1) turns.push({ speaker: "A", role: "choices", q: i, text: choices });
+      else if (g.part === 2) {
+        turns.push({ speaker: "A", role: "prompt", q: i, text: q.question });
+        turns.push({ speaker: "B", role: "choices", q: i, text: choices });
+      } else
+        turns.push({
+          speaker: "narrator",
+          role: "question",
+          q: i,
+          text: `Number ${numberWords(first + i)}. ${q.question}`,
+        });
     });
-  else turns = [];
+  } else turns = [];
+  delete extra.setType;
   const image = illustrationFor(g);
   return {
     ...g,
@@ -150,8 +235,50 @@ export function parseGroup(raw, g, e = { exam: "toeic" }) {
     passages,
     segments: turns.map((t, i) => ({ ...t, id: `${g.id}-s${i + 1}`, status: "pending", reviewed: false })),
     ...(image ? { image: image.image, imageAlt: image.imageAlt } : {}),
+    ...extra,
     error: null,
   };
+}
+
+function setExtras(d, g, turns, questions) {
+  const out = {};
+  if (d.setType !== undefined) {
+    const t = String(d.setType).trim().toLowerCase().replace(/[.]$/, "");
+    if (!/^[a-z][a-z ,'-]{2,70}$/.test(t)) throw Error("세트 유형 형식 오류");
+    out.setType = t;
+  }
+  const spoken = turns
+    .map((t) => t.text)
+    .join(" ")
+    .toLowerCase()
+    .replace(/[^a-z0-9' ]+/g, " ")
+    .replace(/\s+/g, " ");
+  for (const q of questions) {
+    const quote = q.question.match(/["“]([^"”]{3,120})["”]/);
+    if (!quote) continue;
+    const said = quote[1]
+      .toLowerCase()
+      .replace(/[^a-z0-9' ]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!spoken.includes(said)) throw Error("인용 표현이 대본에 없습니다.");
+  }
+  if (d.graphic !== undefined && d.graphic !== null) {
+    const gr = d.graphic;
+    const rows = gr?.rows;
+    if (
+      !text(gr?.title, 80) ||
+      !Array.isArray(rows) ||
+      rows.length < 2 ||
+      rows.length > 9 ||
+      rows.some((r) => !Array.isArray(r) || r.length !== rows[0].length || r.length < 2 || r.length > 4) ||
+      rows.flat().some((c) => typeof c !== "string" || c.length > 60)
+    )
+      throw Error("그래픽 표 형식 오류");
+    if (!questions.some((q) => /look at the graphic/i.test(q.question))) throw Error("그래픽 문항 누락");
+    out.table = { title: gr.title.trim(), rows: rows.map((r) => r.map((c) => c.trim())) };
+  }
+  return out;
 }
 
 export function fixedGroup(g) {

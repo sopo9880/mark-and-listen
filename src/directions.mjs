@@ -4,7 +4,8 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-const KEY = /^(?:lc-intro|lc-end|p[1-4]-directions|num-(?:[1-9]|[1-9]\d|100)|intro-\d{2,3}-\d{2,3})$/;
+const KEY =
+  /^(?:lc-intro|lc-end|p1-begin|next-page|p[1-4]-directions|num-(?:[1-9]|[1-9]\d|100)|intro-\d{2,3}-\d{2,3})$/;
 
 export class DirectionBundle {
   constructor(root) {

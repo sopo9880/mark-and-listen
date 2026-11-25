@@ -110,13 +110,19 @@ test("transcription requests: Gemini inline WAV and OpenAI transcription endpoin
 
 test("voices rotate per group and conversation speakers never share a voice", () => {
   const e = { groups: blueprint("toeic", { 2: 4, 3: 6 }) };
-  const p2 = e.groups
-    .filter((g) => g.part === 2)
-    .map((g) => voiceFor("gemini", e, g, { speaker: "narrator" }));
+  const p2 = e.groups.filter((g) => g.part === 2).map((g) => voiceFor("gemini", e, g, { speaker: "A" }));
   assert.ok(new Set(p2).size >= 3, "Part 2 items use several voices");
+  for (const g of e.groups.filter((g) => g.part === 2)) {
+    assert.notEqual(voiceFor("gemini", e, g, { speaker: "A" }), voiceFor("gemini", e, g, { speaker: "B" }));
+  }
+  // One narrator everywhere, never used by a speaker.
+  const narrators = e.groups.map((g) => voiceFor("gemini", e, g, { speaker: "narrator" }));
+  assert.deepEqual([...new Set(narrators)], ["Charon"]);
   for (const g of e.groups.filter((g) => g.part === 3)) {
     const v = ["A", "B", "C", "narrator"].map((speaker) => voiceFor("openai", e, g, { speaker }));
     assert.equal(new Set(v).size, 4, v.join(","));
+    const gv = ["A", "B", "C"].map((speaker) => voiceFor("gemini", e, g, { speaker }));
+    assert.ok(!gv.includes("Charon"));
   }
 });
 
@@ -131,23 +137,36 @@ test("the listening timeline uses real-test answer time and adds directions to a
     "lc-intro": { text: "Listening Test.", duration: 20 },
     "p3-directions": { text: "Part Three.", duration: 10 },
   };
-  for (let n = 1; n <= 100; n++) clips[`num-${n}`] = { text: `Number ${n}.`, duration: 1 };
-  clips["intro-32-34"] = {
-    text: "Questions 32 through 34 refer to the following conversation.",
-    duration: 3,
-  };
+  for (let n = 1; n <= 31; n++) clips[`num-${n}`] = { text: `Number ${n}.`, duration: 1 };
+  clips["p1-begin"] = { text: "Part One begins now.", duration: 1 };
+  clips["next-page"] = { text: "Please turn to the next page.", duration: 1 };
   const e = { id: "x", exam: "toeic", config: {}, groups, directions: { clips } };
   const t = audioTimeline(e);
   assert.equal(t[0].key, "lc-intro");
-  assert.equal(t[1].key, "num-1");
+  assert.equal(t[1].key, "p1-begin");
+  assert.equal(t[2].key, "num-1");
   const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-6, `${msg ?? ""} ${a} ≈ ${b}`);
-  near(t[2].start - t[1].end, GAPS.cue);
-  near(t[3].start - t[2].end, GAPS.part12, "5 s to answer a Part 1 item");
+  near(t[3].start - t[2].end, GAPS.cue);
+  near(t[4].start - t[3].end, GAPS.part12, "5 s to answer a Part 1 item");
+  // Page turns after questions 2 and 6.
+  const pages = t.filter((x) => x.key === "next-page");
+  assert.equal(pages.length, 5);
+  // Part 2: number cue, question voice, response voice, 5 s.
+  const p2 = groups.find((g) => g.part === 2);
+  const p2entries = t.filter((x) => x.groupId === p2.id);
+  assert.equal(p2entries[0].key, "num-7");
+  assert.deepEqual(
+    p2entries.slice(1, 3).map((x) => x.role),
+    ["prompt", "choices"],
+  );
+  // Part 3: the narrator introduces the set and reads numbered questions with 8 s to answer.
   const p3 = groups.find((g) => g.part === 3);
   const p3entries = t.filter((x) => x.groupId === p3.id);
-  assert.equal(p3entries[0].key, "intro-32-34");
-  const q32 = p3entries.findIndex((x) => x.key === "num-32");
-  near(p3entries[q32 + 2].start - p3entries[q32 + 1].end, GAPS.part34, "8 s to answer a Part 3 question");
+  assert.equal(p3entries[0].role, "intro");
+  assert.match(p3entries[0].text, /^Questions thirty-two through thirty-four/);
+  const q32 = p3entries.findIndex((x) => x.role === "question");
+  assert.match(p3entries[q32].text, /^Number thirty-two\. /);
+  near(p3entries[q32 + 1].start - p3entries[q32].end, GAPS.part34, "8 s to answer a Part 3 question");
   assert.ok(t.some((x) => x.key === "p3-directions"));
   // Partial episodes never get directions or number cues.
   assert.equal(
@@ -290,4 +309,62 @@ test("server: saved keys, automatic connection checks, model lists, directions a
   const live = await post("test-live", { script: "single" });
   assert.equal(live.status, 422);
   assert.equal(live.data.detail.transcript, "wrong words only");
+});
+
+test("Part 3/4 sets carry their type, graphic table and quoted lines as in the real test", async () => {
+  const { parseGroup, setPlan } = await import("../src/episode-content.mjs");
+  const g = { id: "p3-11", part: 3, count: 3, status: "pending" };
+  assert.ok(setPlan(g).graphic, "sets 62–70 have a graphic");
+  assert.equal(setPlan({ id: "p3-6", part: 3 }).kind, "conversation with three speakers");
+  const q = (question) => ({ question, choices: ["a", "b", "c", "d"], answer: 0, explanation: "해설" });
+  const raw = {
+    setType: "conversation and price list",
+    graphic: {
+      title: "Price List",
+      rows: [
+        ["Item", "Price"],
+        ["Small box", "five dollars"],
+        ["Large box", "nine dollars"],
+      ],
+    },
+    turns: [
+      { speaker: "A", text: "Hi, I need some boxes." },
+      { speaker: "B", text: "Sure. That's a popular size." },
+      { speaker: "A", text: "Great, I'll take two." },
+    ],
+    questions: [
+      q("What does the man want?"),
+      q("Look at the graphic. How much will the man pay?"),
+      q('What does the woman imply when she says, "That\'s a popular size"?'),
+    ],
+  };
+  const e = {
+    exam: "toeic",
+    groups: [{ id: "p1-1", count: 6 }, { id: "p2-1", count: 25 }, { id: "p3-1", count: 30 }, g],
+  };
+  const parsed = parseGroup(raw, g, e);
+  assert.equal(
+    parsed.segments[0].text,
+    "Questions sixty-two through sixty-four refer to the following conversation and price list.",
+  );
+  assert.equal(parsed.segments.at(-1).text, `Number sixty-four. ${raw.questions[2].question}`);
+  assert.equal(parsed.table.title, "Price List");
+  assert.equal(parsed.setType, undefined);
+  assert.throws(
+    () =>
+      parseGroup(
+        {
+          ...raw,
+          questions: [
+            raw.questions[0],
+            raw.questions[1],
+            q('What does he mean when he says, "No way at all"?'),
+          ],
+        },
+        g,
+        e,
+      ),
+    /인용/,
+  );
+  assert.throws(() => parseGroup({ ...raw, questions: [q("a?"), q("b?"), q("c?")] }, g, e), /그래픽 문항/);
 });

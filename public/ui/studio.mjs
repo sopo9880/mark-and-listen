@@ -10,6 +10,7 @@ import {
   promptDialog,
   segmented,
   fmtDate,
+  graphicTable,
 } from "./dom.mjs";
 import { api, loadEpisode, production, onChange, state } from "./api.mjs";
 import { isAudioGroup, partLabel, LETTERS, examOf } from "../lib/exams.mjs";
@@ -431,6 +432,7 @@ export async function render(page, { params, go }) {
           text: [g.error, g.lastError && `마지막 내부 오류: ${g.lastError}`].filter(Boolean).join(" · "),
         }),
       );
+    if (g.table) body.append(graphicTable(g.table));
     if (g.image || g.graphic)
       body.append(
         h("img", { class: "figure", src: g.image || g.graphic, alt: g.imageAlt || g.graphicAlt || "" }),

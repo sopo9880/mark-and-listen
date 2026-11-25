@@ -124,22 +124,30 @@ export function listeningChunks(e) {
 }
 
 const VOICES = {
-  gemini: { f: ["Kore", "Aoede", "Leda", "Zephyr"], m: ["Puck", "Charon", "Orus", "Fenrir"] },
-  openai: { f: ["marin", "coral", "sage", "shimmer"], m: ["cedar", "ash", "ballad", "verse"] },
+  gemini: { f: ["Kore", "Aoede", "Leda", "Zephyr"], m: ["Puck", "Iapetus", "Orus", "Fenrir"] },
+  openai: { f: ["marin", "coral", "sage", "shimmer"], m: ["ash", "echo", "ballad", "verse"] },
 };
+// One narrator for the whole listening section, as in the real test: the same voice as the bundled directions.
+const NARRATOR = { gemini: "Charon", openai: "cedar" };
 
-/** Voices rotate per question group; in a conversation the speakers always get different voices. */
 export function voiceFor(provider, e, g, s) {
   const pool = VOICES[provider] ?? VOICES.gemini;
+  const narrator =
+    provider === "gemini" && e?.directions?.voice
+      ? e.directions.voice
+      : (NARRATOR[provider] ?? NARRATOR.gemini);
+  if (s.speaker === "narrator") return narrator;
   const n = Math.max(0, e.groups.indexOf(g));
   const first = n % 2 ? "m" : "f",
     other = first === "f" ? "m" : "f";
-  const pick = (gender, k) => pool[gender][(Math.floor(n / 2) + k) % 4];
+  const usable = (gender) => pool[gender].filter((v) => v !== narrator);
+  const pick = (gender, k) => {
+    const list = usable(gender);
+    return list[(Math.floor(n / 2) + k) % list.length];
+  };
   if (s.speaker === "A") return pick(first, 0);
   if (s.speaker === "B") return pick(other, 0);
-  if (s.speaker === "C") return pick(first, 1);
-  // Narrator: Part 1/2 items and Part 4 talks rotate; Part 3 questions use a voice not used by the speakers.
-  return g.part === 3 ? pick(other, 2) : pick(n % 4 < 2 ? "f" : "m", n);
+  return pick(first, 1); // C
 }
 
 export async function buildServer({

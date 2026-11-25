@@ -1,4 +1,4 @@
-import { h, icon, button, confirmDialog, toast, fmtClock } from "./dom.mjs";
+import { h, icon, button, confirmDialog, toast, fmtClock, graphicTable } from "./dom.mjs";
 import { api, loadEpisode } from "./api.mjs";
 import { examOf, partLabel, audioTimeline, sectionOf } from "../lib/exams.mjs";
 import { advanceAttempt, remainingSections } from "../lib/attempt.mjs";
@@ -122,6 +122,7 @@ export async function render(page, { params, go }) {
         block.append(
           h("img", { class: "figure", src: g.image || g.graphic, alt: g.imageAlt || g.graphicAlt || "" }),
         );
+      if (g.table) block.append(graphicTable(g.table));
       for (const p of g.passages ?? [])
         block.append(
           h("article", { class: "passage" }, h("h4", { text: p.title }), h("p", { text: p.body })),
