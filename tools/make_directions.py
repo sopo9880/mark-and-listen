@@ -113,9 +113,7 @@ def plausible(script: str, seconds: float) -> bool:
 
 
 # ── Gemini calls ──
-def pick_model(client, want: str | None, kind: str) -> str:
-    if want:
-        return want
+def candidates(client, kind: str) -> list[str]:
     names = []
     for m in client.models.list():
         name = (m.name or "").removeprefix("models/")
@@ -126,9 +124,30 @@ def pick_model(client, want: str | None, kind: str) -> str:
             names.append(name)
     version = lambda n: float(re.search(r"gemini-(\d+(?:\.\d+)?)", n).group(1)) if re.search(r"gemini-(\d+(?:\.\d+)?)", n) else 0
     names.sort(key=lambda n: (-version(n), "preview" in n, len(n)))
-    if names:
-        return names[0]
-    return "gemini-2.5-flash-preview-tts" if kind == "tts" else "gemini-2.5-flash"
+    return names or (["gemini-2.5-flash-preview-tts"] if kind == "tts" else ["gemini-2.5-flash"])
+
+
+TRANSIENT = re.compile(r"\b(429|500|502|503|504)\b|UNAVAILABLE|RESOURCE_EXHAUSTED|DEADLINE|overloaded|high demand|timed? ?out|Connection", re.I)
+
+
+def is_transient(error: Exception) -> bool:
+    return bool(TRANSIENT.search(f"{type(error).__name__} {error}"))
+
+
+def with_backoff(call, label: str, max_wait: float):
+    """Retries temporary API errors (busy model, quota, network) with growing pauses, up to max_wait seconds."""
+    waited, delay = 0.0, 10.0
+    while True:
+        try:
+            return call()
+        except Exception as error:
+            if not is_transient(error) or waited >= max_wait:
+                raise
+            pause = min(delay, max_wait - waited) if max_wait > waited else delay
+            print(f"    {label}: server busy ({str(error)[:60]}…) — waiting {pause:.0f}s")
+            time.sleep(pause)
+            waited += pause
+            delay = min(delay * 2, 120)
 
 
 def speak(client, types, model: str, voice: str, text: str) -> tuple[bytes, int]:
@@ -179,7 +198,9 @@ def main() -> int:
     parser.add_argument("--stt-model", help="model used to check each clip (default: newest Gemini Flash)")
     parser.add_argument("--key", help="Gemini API key (default: GEMINI_API_KEY environment variable)")
     parser.add_argument("--only", help="regular expression: generate only matching clip keys")
-    parser.add_argument("--tries", type=int, default=3)
+    parser.add_argument("--tries", type=int, default=3, help="regenerations per clip when the audio does not match (default 3)")
+    parser.add_argument("--max-wait", type=float, default=900, help="seconds to keep retrying a busy/overloaded API per call (default 900)")
+    parser.add_argument("--list-models", action="store_true", help="print the TTS and transcription models your key can use")
     parser.add_argument("--dry-run", action="store_true", help="print the scripts without calling the API")
     args = parser.parse_args()
 
@@ -204,16 +225,26 @@ def main() -> int:
         return 2
 
     client = genai.Client(api_key=key)
-    tts_model = pick_model(client, args.model, "tts")
-    stt_model = pick_model(client, args.stt_model, "stt")
-    print(f"TTS {tts_model} · voice {args.voice} · check {stt_model}")
+    tts_all, stt_all = candidates(client, "tts"), candidates(client, "stt")
+    if args.list_models:
+        print("TTS models:  " + ", ".join(tts_all))
+        print("Check models: " + ", ".join(stt_all))
+        return 0
+    tts_model = args.model or tts_all[0]
+    stt_models = [args.stt_model] if args.stt_model else stt_all
+    print(f"TTS {tts_model} · voice {args.voice} · check {stt_models[0]}")
+    print(f"(other TTS models for --model: {', '.join(m for m in tts_all if m != tts_model) or 'none'})")
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     index_file = out / "index.json"
     index = json.loads(index_file.read_text("utf-8")) if index_file.exists() else {}
-    if index.get("voice") not in (None, args.voice):
-        print(f"Existing clips use voice {index['voice']}; use a new --out folder for another voice.", file=sys.stderr)
+    if index.get("voice") not in (None, args.voice) or index.get("model") not in (None, tts_model):
+        print(
+            f"Existing clips use voice {index.get('voice')} / model {index.get('model')}. Every clip must share one voice: "
+            "pass the same --voice/--model, or use a new --out folder.",
+            file=sys.stderr,
+        )
         return 2
     index.update({"schema": 1, "voice": args.voice, "model": tts_model, "clips": index.get("clips", {})})
 
@@ -224,18 +255,28 @@ def main() -> int:
             continue
         for attempt in range(1, args.tries + 1):
             try:
-                pcm, rate = speak(client, types, tts_model, args.voice, text)
+                # The TTS model never changes during a run, so every clip keeps the same voice.
+                pcm, rate = with_backoff(lambda: speak(client, types, tts_model, args.voice, text), "TTS", args.max_wait)
                 seconds = len(pcm) / 2 / rate
                 path = out / f"{name}.wav"
                 write_wav(path, pcm, rate)
                 if not plausible(text, seconds):
                     reason = f"length {seconds:.1f}s does not fit"
                 else:
-                    heard = transcribe(client, types, stt_model, path.read_bytes())
+                    heard, last_error = None, None
+                    for check_model in stt_models:  # checking may switch models; it does not affect the voice
+                        try:
+                            heard = with_backoff(
+                                lambda: transcribe(client, types, check_model, path.read_bytes()), "check", args.max_wait / 3
+                            )
+                            break
+                        except Exception as error:
+                            last_error = error
+                    if heard is None:
+                        raise last_error
                     reason = None if matches(text, heard) else f"heard: {heard!r}"
-            except Exception as error:  # network, quota, malformed response
-                reason = f"error: {error}"
-                time.sleep(min(30, 3 * attempt))
+            except Exception as error:  # still busy after waiting, or a malformed response
+                reason = f"error: {str(error)[:200]}"
             if reason is None:
                 data = path.read_bytes()
                 index["clips"][name] = {
@@ -252,7 +293,7 @@ def main() -> int:
             failed.append(name)
             (out / f"{name}.wav").unlink(missing_ok=True)
 
-    print(f"\nDone: {len(index['clips'])} clips in {out.resolve()}")
+    print(f"\nDone: {len(index['clips'])}/{len(clips())} clips in {out.resolve()}")
     if failed:
         print("Failed (run again to retry): " + ", ".join(failed))
         return 1
