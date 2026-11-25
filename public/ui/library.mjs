@@ -48,8 +48,6 @@ export async function render(page) {
         ["all", "전체"],
         ["ready", "응시 가능"],
         ["draft", "제작 중"],
-        ["toeic", "TOEIC"],
-        ["cbt", "객관식"],
       ],
       filter,
       (v) => ((filter = v), draw()),

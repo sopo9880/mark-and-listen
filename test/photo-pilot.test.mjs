@@ -194,30 +194,32 @@ test("six-photo pilot imports, independently rejects bad questions, retries audi
   const created = await request("photo-pilot", { images, provider: "gemini", model: "mock-image" });
   assert.equal(created.status, 200);
   const { id } = created.data;
+  // Rejected photo items are retried internally and fail only after three tries.
   for (const invalid of ["ambiguous", "multiple", "duplicate"]) {
     verdict = invalid;
-    assert.equal((await request("produce", { id })).status, 502);
-    assert.equal((await store.read(id)).groups[0].status, "failed");
+    assert.equal((await request("produce", { id })).status, 200);
   }
+  assert.equal((await store.read(id)).groups[0].status, "failed");
+  assert.equal((await store.read(id)).groups[0].tries, 3);
   verdict = "ok";
-  for (let i = 0; i < 6; i++) assert.equal((await request("produce", { id })).status, 200);
+  assert.equal((await request("produce", { id, retryFailed: true })).status, 200);
+  for (let i = 0; i < 5; i++) assert.equal((await request("produce", { id })).status, 200);
+  assert.ok((await store.read(id)).groups.every((g) => g.status === "ready" && g.verified));
   assert.equal((await request("attempt/start", { id })).status, 409);
   assert.equal((await request("test-live", { script: "choices" })).status, 200);
   assert.equal(voiceCalls, 2);
   assert.equal((await request("produce", { id })).status, 200);
   failAudio = true;
   const before = voiceCalls;
-  assert.equal((await request("produce", { id })).status, 502);
+  assert.equal((await request("produce", { id })).status, 200);
   assert.equal(voiceCalls - before, 3);
   assert.equal((await store.read(id)).groups[0].segments[0].status, "ready");
   assert.equal((await store.read(id)).groups[1].segments[0].status, "failed");
   failAudio = false;
-  for (let i = 0; i < 5; i++) assert.equal((await request("produce", { id })).status, 200);
+  assert.equal((await request("produce", { id, retryFailed: true })).status, 200);
+  for (let i = 0; i < 4; i++) assert.equal((await request("produce", { id })).status, 200);
   let e = await store.read(id);
-  for (const group of e.groups) {
-    await request("review", { id, groupId: group.id, approved: true });
-    await request("review", { id, groupId: group.id, segmentId: group.segments[0].id, approved: true });
-  }
+  assert.ok(e.groups.every((g) => g.segments[0].status === "ready"));
   await close();
   ({ store, request, base } = await listen());
   offline = true;

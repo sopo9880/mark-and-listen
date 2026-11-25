@@ -14,6 +14,7 @@ concurrency:
 
 env:
   VERSION: 0.2.0.0
+  MARK_BUILD_CHANNEL: release
   INSTALLER: Mark-and-Listen-0.2.0.0-Windows-x64-Setup.exe
   # Repository variable shared by the installer build and manifest verification.
   MARK_UPDATE_PUBLIC_KEY: ${{ vars.APP_UPDATE_PUBLIC_KEY }}

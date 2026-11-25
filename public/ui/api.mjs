@@ -30,6 +30,7 @@ export async function api(path, body) {
 export async function connect() {
   const session = await api("session");
   token = session.token;
+  state.testMode = !!session.testMode;
   return session;
 }
 
@@ -37,7 +38,7 @@ const listeners = new Set();
 export const onChange = (fn) => (listeners.add(fn), () => listeners.delete(fn));
 const emit = (what) => listeners.forEach((fn) => fn(what));
 
-export const state = { episodes: [], settings: null, connections: null };
+export const state = { episodes: [], settings: null, connections: null, testMode: false };
 
 export async function loadLibrary() {
   state.episodes = (await api("library")).episodes;
@@ -62,7 +63,7 @@ export const production = {
   stopRequested: false,
   message: "",
   lastError: null,
-  async start(id, { fixed = false, retrySegment } = {}) {
+  async start(id, { fixed = false, retrySegment, retryFailed = false } = {}) {
     if (this.running) throw Error("이미 다른 회차를 제작하고 있습니다.");
     Object.assign(this, {
       episodeId: id,
@@ -78,9 +79,15 @@ export const production = {
         emit("production");
         await api("produce", { id, retrySegment });
       } else {
+        let first = true;
         for (;;) {
           if (this.stopRequested) break;
-          const r = await api("produce", { id, fixed });
+          const r = await api("produce", {
+            id,
+            fixed,
+            ...(first && retryFailed ? { retryFailed: true } : {}),
+          });
+          first = false;
           this.message = describe(r.episode);
           emit("production");
           if (!r.more) break;

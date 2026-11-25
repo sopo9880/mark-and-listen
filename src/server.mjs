@@ -9,6 +9,8 @@ import {
 } from "./photo-pilot.mjs";
 import { PhotoLibrary } from "./photo-library.mjs";
 import { verifiedNarration } from "./narration.mjs";
+import { solvePrompt, checkAnswers } from "./verify.mjs";
+import { TEST_MODE } from "./build-info.mjs";
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
 import { readFile, writeFile, mkdir, stat, rename } from "node:fs/promises";
@@ -16,18 +18,19 @@ import { createReadStream } from "node:fs";
 import { join, extname } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { EpisodeStore, notebookEntries } from "./episode-store.mjs";
-import { isAudioGroup } from "../public/lib/exams.mjs";
+import { EpisodeStore, notebookEntries, validateWav } from "./episode-store.mjs";
+import { isAudioGroup, audioTimeline } from "../public/lib/exams.mjs";
 import { isOpen } from "../public/lib/attempt.mjs";
 import { groupPrompt, parseGroup, fixedGroup } from "./episode-content.mjs";
 import { createCodexUpdater } from "./codex-updater.mjs";
 import { generateWithCodex, codexLoginStatus, codexBrowserLogin } from "./codex-engine.mjs";
 import { generateWithProvider } from "./providers.mjs";
 import { listLiveModels, credentials } from "./live-models.mjs";
-import { auditionWithGeminiLive } from "./gemini-live.mjs";
+import { auditionWithGeminiLive, wavFromPcm } from "./gemini-live.mjs";
 import { auditionWithOpenAILive } from "./openai-live.mjs";
 export const VERSION = APP_VERSION;
 const PUBLIC = fileURLToPath(new URL("../public/", import.meta.url));
+const BUNDLED_PHOTOS = fileURLToPath(new URL("../assets/part1-photos/", import.meta.url));
 const dataRoot = () =>
   process.env.MARK_LISTEN_DATA ||
   join(
@@ -50,8 +53,36 @@ const json = async (req) => {
     throw fail(400, "JSON 오류");
   }
 };
+/** Test mode: the whole listening section as one WAV, with the same pauses the exam timeline uses. */
+export async function listeningWav(store, e) {
+  const timeline = audioTimeline(e).filter((s) => s.status === "ready");
+  if (!timeline.length) throw Object.assign(Error("준비된 듣기 음원이 없습니다."), { status: 409 });
+  const chunks = [];
+  let rate = 0,
+    size = 0,
+    at = 0;
+  for (const seg of timeline) {
+    const wav = await readFile(await store.audio(e.id, seg.id));
+    const r = validateWav(wav);
+    if (rate && r !== rate) throw Object.assign(Error("음원 샘플링 속도가 서로 다릅니다."), { status: 409 });
+    rate = r;
+    const gap = Math.max(0, Math.round((seg.start - at) * rate)) * 2;
+    if (gap) {
+      chunks.push(Buffer.alloc(gap));
+      size += gap;
+    }
+    const pcm = wav.subarray(44);
+    chunks.push(pcm);
+    size += pcm.length;
+    at = seg.start + pcm.length / 2 / rate;
+  }
+  return wavFromPcm(chunks, size, rate);
+}
+
 export async function buildServer({
   root = dataRoot(),
+  photoRoot = BUNDLED_PHOTOS,
+  testMode = TEST_MODE,
   updater,
   generate = generateWithProvider,
   codex = generateWithCodex,
@@ -63,7 +94,7 @@ export async function buildServer({
   const appUpdate = createAppUpdater({ publicKey: UPDATE_PUBLIC_KEY });
   let appUpdating = false;
   const store = await new EpisodeStore(join(root, "episodes")).init();
-  const photos = new PhotoLibrary(join(root, "photos"));
+  const photos = new PhotoLibrary(photoRoot);
   const photoUsage = async () => {
     const usage = new Map();
     for (const e of await store.list())
@@ -208,22 +239,18 @@ export async function buildServer({
         throw fail(403, "다른 사이트의 요청은 허용하지 않습니다.");
       const path = new URL(req.url, "http://localhost").pathname;
       if (req.method === "GET" && path === "/api/session") {
-        send(res, { token, build: VERSION, ...(smoke ? { smoke: true } : {}) });
+        send(res, { token, build: VERSION, testMode, ...(smoke ? { smoke: true } : {}) });
         return;
       }
       if (smoke && req.method === "GET" && path === "/api/smoke") {
         send(res, { uiReady });
         return;
       }
-      if (req.method === "GET" && path === "/api/photos") {
-        const usage = await photoUsage();
-        send(res, { photos: (await photos.list()).map((p) => ({ ...p, used: usage.get(p.sha256) ?? 0 })) });
-        return;
-      }
-      const libraryPhoto = /^\/api\/photos\/([0-9a-f]{64})\.jpg$/.exec(path);
-      if (libraryPhoto && ["GET", "HEAD"].includes(req.method)) {
-        res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
-        await stream(req, res, photos.file(libraryPhoto[1]), "image/jpeg");
+      const listening = /^\/api\/listening\/([a-zA-Z0-9-]+)\.wav$/.exec(path);
+      if (listening && testMode && ["GET", "HEAD"].includes(req.method)) {
+        const wav = await listeningWav(store, await store.read(listening[1]));
+        res.writeHead(200, { "Content-Type": "audio/wav", "Content-Length": wav.length });
+        res.end(req.method === "HEAD" ? undefined : wav);
         return;
       }
       if (req.method === "GET" && path === "/api/notebook") {
@@ -383,6 +410,7 @@ export async function buildServer({
           return;
         }
         if (path === "/api/photo-pilot") {
+          if (!testMode) throw fail(404, "API 없음");
           const { provider, model } = b;
           if (
             !["gemini", "openai"].includes(provider) ||
@@ -402,19 +430,8 @@ export async function buildServer({
           send(res, await attachPhotos(store, episode, photos));
           return;
         }
-        if (path === "/api/photos/import") {
-          try {
-            send(res, await photos.import(b.items));
-          } catch (e) {
-            throw fail(400, e.message);
-          }
-          return;
-        }
-        if (path === "/api/photos/delete") {
-          send(res, await photos.remove((b.shas ?? []).filter((x) => /^[0-9a-f]{64}$/.test(x))));
-          return;
-        }
         if (path === "/api/episodes/swap-photo") {
+          if (!testMode) throw fail(404, "API 없음");
           if (busy) throw fail(409, "제작 작업이 끝난 뒤 교체하세요.");
           const e = await store.read(b.id);
           if (e.attempts.length) throw fail(409, "응시한 회차는 변경할 수 없습니다.");
@@ -452,8 +469,7 @@ export async function buildServer({
         }
         if (path === "/api/episodes") {
           let picks = null;
-          const wantsPhotos =
-            b.part1 === "photos" && (b.exam ?? "toeic") === "toeic" && Number(b.counts?.[1]) > 0;
+          const wantsPhotos = (b.exam ?? "toeic") === "toeic" && Number(b.counts?.[1]) > 0;
           try {
             if (wantsPhotos && b.fixed !== true) {
               const chosen = await photos.pick(Number(b.counts[1]), await photoUsage());
@@ -520,7 +536,7 @@ export async function buildServer({
           send(res, await store.attempt(b.id, b.attemptId, b.action));
           return;
         }
-        if (["/api/produce", "/api/review", "/api/test-live"].includes(path)) {
+        if (["/api/produce", "/api/test-live"].includes(path)) {
           if (busy || updateBusy) throw fail(409, "다른 제작 또는 업데이트가 진행 중입니다.");
           if (Date.now() < cooldown) throw fail(429, "사용량 한도 이후 잠시 기다려 주세요.");
           busy = true;
@@ -528,7 +544,7 @@ export async function buildServer({
           const close = () => abort.abort();
           res.once("close", close);
           try {
-            const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(120000)]);
+            const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(300000)]);
             if (path === "/api/test-live") {
               const args = await liveArgs();
               const r = await verifiedNarration(speak, {
@@ -551,25 +567,33 @@ export async function buildServer({
             }
             const e = await store.read(b.id);
             if (e.attempts.length) throw fail(409, "응시한 회차는 변경할 수 없습니다. 새 회차를 만드세요.");
-            if (path === "/api/review") {
-              const g = e.groups.find((g) => g.id === b.groupId);
-              if (!g || g.status !== "ready") throw fail(400, "문항 없음");
-              if (b.segmentId) {
-                const s = g.segments.find((s) => s.id === b.segmentId);
-                if (!s || s.status !== "ready") throw fail(400, "음원 없음");
-                s.reviewed = b.approved === true;
-              } else if (b.segments === "verified") {
-                for (const s of g.segments)
-                  if (s.status === "ready" && s.diff?.exact) s.reviewed = b.approved === true;
-              } else g.reviewed = b.approved === true;
+            const MAX_TRIES = 3;
+            if (b.retryFailed === true) {
+              for (const x of e.groups)
+                if (x.status === "failed") Object.assign(x, { status: "pending", tries: 0, error: null });
+              for (const x of e.groups)
+                for (const seg of x.segments ?? [])
+                  if (seg.status === "failed") Object.assign(seg, { status: "pending", error: null });
               await store.write(e);
-              send(res, e);
-              return;
             }
-            let g = e.groups.find((g) => g.status !== "ready");
+            const textCall = async (prompt) => {
+              const provider = settings.textProvider;
+              if (provider !== "codex" && !getKey(provider))
+                throw fail(400, "설정에서 문항 생성 엔진의 API 키를 연결하세요.");
+              return provider === "codex"
+                ? codex({ executable: (await updater.executable()) ?? "codex", prompt, signal })
+                : generate({
+                    provider,
+                    apiKey: getKey(provider),
+                    model: settings.textModel || undefined,
+                    prompt,
+                    signal,
+                  });
+            };
+            let g = e.groups.find((x) => x.status !== "ready" && x.status !== "failed");
             if (g) {
+              g.tries = (g.tries ?? 0) + 1;
               try {
-                const provider = settings.textProvider;
                 if (g.photoHash) {
                   // Photo questions never fall back to the bundled illustrations.
                   const vision = e.photoPilot ?? {
@@ -577,10 +601,7 @@ export async function buildServer({
                     model: settings.visionModel,
                   };
                   if (vision.provider !== "codex" && !getKey(vision.provider))
-                    throw fail(
-                      400,
-                      "설정에서 사진 문항 엔진(이미지 입력)의 API 키를 연결하세요. 사진 회차는 삽화로 대체하지 않습니다.",
-                    );
+                    throw fail(400, "설정에서 사진 문항 엔진(이미지 입력)의 API 키를 연결하세요.");
                   const executable =
                     vision.provider === "codex" ? ((await updater.executable()) ?? "codex") : null;
                   Object.assign(
@@ -605,38 +626,58 @@ export async function buildServer({
                 } else if (e.fixed || b.fixed === true) {
                   Object.assign(g, fixedGroup(g));
                 } else {
-                  const prompt = groupPrompt(e, g);
-                  const raw =
-                    provider === "codex"
-                      ? await codex({ executable: (await updater.executable()) ?? "codex", prompt, signal })
-                      : await generate({
-                          provider,
-                          apiKey: getKey(provider),
-                          model: settings.textModel || undefined,
-                          prompt,
-                          signal,
-                        });
-                  Object.assign(g, parseGroup(raw, g, e));
+                  const parsed = parseGroup(await textCall(groupPrompt(e, g)), g, e);
+                  const check = checkAnswers(await textCall(solvePrompt(e, parsed)), parsed);
+                  if (!check.ok) throw Object.assign(Error(check.reason), { verify: true });
+                  Object.assign(g, parsed);
                 }
+                Object.assign(g, { verified: true, error: null });
                 await store.write(e);
               } catch (err) {
-                g.status = "failed";
-                g.error =
-                  err.status === 400
-                    ? err.message
-                    : g.photoHash
-                      ? "사진 문항 생성 또는 독립 검증 실패. 이미지 입력 모델·키·할당량과 사진의 명확성 및 중복 여부를 확인하세요."
-                      : "문항 생성 또는 검증 실패. 엔진·로그인·모델 설정을 확인하고 재시도하세요.";
+                if (err.status === 400 || err.status === 429) {
+                  g.tries -= 1;
+                  g.error = err.message;
+                  await store.write(e);
+                  throw err;
+                }
+                g.lastError = String(err.message ?? "").slice(0, 300);
+                if (g.tries < MAX_TRIES) {
+                  // Internal retry: regenerate (and for photos, try another bundled photo of a new scene).
+                  if (g.photoHash && e.photoPart1) {
+                    try {
+                      const library = await photos.list();
+                      const avoid = e.groups
+                        .filter((x) => x.photoHash)
+                        .map(
+                          (x) =>
+                            library.find((p) => p.sha256 === x.photoHash) ?? {
+                              sha256: x.photoHash,
+                              name: x.photoName ?? "",
+                            },
+                        );
+                      const [next] = await photos.pick(1, await photoUsage(), Math.random, avoid);
+                      await writeFile(photoPath(store.root, e.id, g.id), await photos.read(next.sha256), {
+                        mode: 0o600,
+                      });
+                      Object.assign(g, { photoHash: next.sha256, photoName: next.name });
+                    } catch {
+                      // Keep the current photo and try again.
+                    }
+                  }
+                  g.status = "pending";
+                } else {
+                  g.status = "failed";
+                  g.error = "문항을 만들지 못했습니다. 잠시 뒤 ‘실패 항목 다시 시도’를 눌러 주세요.";
+                }
                 await store.write(e);
-                throw fail(502, g.error);
               }
               send(res, { episode: e, more: true });
               return;
             }
             let s;
-            for (const group of e.groups.filter((x) => isAudioGroup(e, x))) {
-              const candidate = group.segments.find((s) =>
-                b.retrySegment ? s.id === b.retrySegment : s.status !== "ready",
+            for (const group of e.groups.filter((x) => isAudioGroup(e, x) && x.status === "ready")) {
+              const candidate = group.segments.find((x) =>
+                b.retrySegment ? x.id === b.retrySegment : x.status !== "ready" && x.status !== "failed",
               );
               if (candidate) {
                 g = group;
@@ -662,15 +703,21 @@ export async function buildServer({
                     : "marin";
               const result = await verifiedNarration(speak, { ...args, prompt: s.text, voice, signal });
               await store.saveAudio(e, s, result);
-              s.provider = args.provider;
-              s.model = args.model;
-              s.voice = voice;
-              s.diff = result.diff;
-              s.attempts = result.attempts;
+              Object.assign(s, {
+                provider: args.provider,
+                model: args.model,
+                voice,
+                diff: result.diff,
+                attempts: result.attempts,
+                reviewed: true,
+              });
               delete s.lastTake;
               await store.write(e);
             } catch (err) {
-              if (s.status !== "ready") s.status = "failed";
+              if (err.status === 400) throw err;
+              const limited = err.status === 429 || err.code === "GEMINI_LIVE_RATE_LIMIT";
+              // A quota stop is not the segment's fault: it stays pending and is picked up on the next run.
+              if (s.status !== "ready") s.status = limited ? "pending" : "failed";
               if (err.last)
                 s.lastTake = {
                   transcript: String(err.last.transcript ?? "").slice(0, 4000),
@@ -678,16 +725,16 @@ export async function buildServer({
                 };
               s.error =
                 err.code === "NARRATION_MISMATCH"
-                  ? err.message
+                  ? "낭독과 대본이 세 번 모두 일치하지 않았습니다."
                   : "Live 생성 실패. 키·모델·할당량을 확인하세요. 다른 공급자로 전환하지 않았습니다.";
               await store.write(e);
               if (err.status === 429 || err.code === "GEMINI_LIVE_RATE_LIMIT") {
                 cooldown = Date.now() + 15000;
-                throw fail(429, s.error);
+                throw fail(429, "Live 사용량 한도에 도달했습니다. 완료된 구간은 저장되어 있습니다.");
               }
-              throw fail(502, s.error);
+              if (b.retrySegment) throw fail(502, s.error);
             }
-            send(res, { episode: e, more: true });
+            send(res, { episode: e, more: !b.retrySegment });
             return;
           } finally {
             busy = false;
@@ -736,6 +783,6 @@ export async function buildServer({
   server.once("listening", () => {
     if (autoUpdate && settings.autoUpdate) void performUpdate();
   });
-  server.requestTimeout = 130000;
+  server.requestTimeout = 310000;
   return { server, store };
 }

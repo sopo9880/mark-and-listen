@@ -11,8 +11,8 @@ import {
   segmented,
   fmtDate,
 } from "./dom.mjs";
-import { api, loadEpisode, production, onChange } from "./api.mjs";
-import { isAudioGroup, partLabel, requiresReview, LETTERS, examOf } from "../lib/exams.mjs";
+import { api, loadEpisode, production, onChange, state } from "./api.mjs";
+import { isAudioGroup, partLabel, LETTERS, examOf } from "../lib/exams.mjs";
 import {
   progressOf,
   examName,
@@ -26,8 +26,11 @@ import {
 
 const openGroups = new Map();
 
+// Production studio. Regular builds show progress only: generated questions, answers, scripts and photos stay
+// hidden until the exam is over. Test builds add an inspector for checking content and audio.
 export async function render(page, { params, go }) {
   const id = params[0];
+  const testMode = !!state.testMode;
   let e = await loadEpisode(id);
   let filter = "all";
   const open = openGroups.get(id) ?? new Set();
@@ -36,7 +39,7 @@ export async function render(page, { params, go }) {
   const head = h("div");
   const pipeline = h("div");
   const history = h("div");
-  const groupsBox = h("div", { class: "groups" });
+  const inspector = h("div", { class: "stack" });
 
   const reload = async () => {
     e = await loadEpisode(id);
@@ -74,9 +77,7 @@ export async function render(page, { params, go }) {
             chip(partsSummary(e)),
             chip(`${p.questions}문항`),
             chip(STAGE_LABEL[p.stage], STAGE_KIND[p.stage]),
-            e.fixed ? chip("고정 대본", "info") : null,
-            e.photoPilot ? chip("사진 파일럿", "info") : null,
-            e.photoPart1 ? chip("Part 1 실사진", "info") : null,
+            testMode && e.fixed ? chip("고정 대본", "info") : null,
           ),
         ),
         h(
@@ -88,35 +89,7 @@ export async function render(page, { params, go }) {
     );
     pipeline.replaceChildren(pipelineCard(e, p));
     history.replaceChildren(historyCard(e));
-    groupsBox.replaceChildren(
-      h(
-        "div",
-        { class: "groups-head" },
-        h("h2", { text: "문항 · 음원" }),
-        segmented(
-          [
-            ["all", "전체"],
-            ["todo", "검수 필요"],
-            ["failed", "실패"],
-          ],
-          filter,
-          (v) => ((filter = v), draw()),
-        ),
-      ),
-      ...e.groups
-        .filter((g) => {
-          if (filter === "failed")
-            return g.status === "failed" || (g.segments ?? []).some((s) => s.status === "failed");
-          if (filter === "todo")
-            return (
-              g.status === "ready" &&
-              ((requiresReview(e) && !g.reviewed) ||
-                (isAudioGroup(e, g) && g.segments.some((s) => s.status === "ready" && !s.reviewed)))
-            );
-          return true;
-        })
-        .map((g) => groupCard(g)),
-    );
+    if (testMode) inspector.replaceChildren(listenCard(e, p), groupsCard(e));
   };
 
   async function rename() {
@@ -142,26 +115,27 @@ export async function render(page, { params, go }) {
     const other = production.running && !mine;
     const attempted = e.attempts.length > 0;
     const steps = [
-      ["문항 생성", p.groupsReady, p.groups, p.groupsReady === p.groups],
+      ["문항 생성 · 자동 검증", `${p.groupsReady} / ${p.groups}`, p.groupsReady === p.groups],
       p.hasAudio
-        ? ["Live 음원", p.segmentsReady, p.segments, p.segments > 0 && p.segmentsReady === p.segments]
-        : null,
-      p.reviewRequired || p.hasAudio
         ? [
-            "검수",
-            p.groupsReviewed * (p.reviewRequired ? 1 : 0) + p.segmentsReviewed,
-            (p.reviewRequired ? p.groups : 0) + p.segments,
-            p.ready,
+            "Live 음원 · 전사 대조",
+            p.segments ? `${p.segmentsReady} / ${p.segments}` : "문항 생성 후",
+            p.segments > 0 && p.segmentsReady === p.segments,
           ]
         : null,
-      ["응시", attemptsOf(e).filter((a) => a.phase === "done").length, null, false],
+      ["응시", `${attemptsOf(e).filter((a) => a.phase === "done").length}회 완료`, false],
     ].filter(Boolean);
-    const open = attemptsOf(e).find((a) => a.phase !== "done");
+    const current = steps.findIndex((s) => !s[2]);
+    const openAttempt = attemptsOf(e).find((a) => a.phase !== "done");
+    const start = (opts) => async () => {
+      await production.start(id, opts);
+      toast(production.message, "ok");
+    };
     let cta;
-    if (open)
+    if (openAttempt)
       cta = h(
         "a",
-        { class: "btn btn-accent btn-lg", href: `#/exam/${id}/${open.id}` },
+        { class: "btn btn-accent btn-lg", href: `#/exam/${id}/${openAttempt.id}` },
         icon("play"),
         h("span", { text: "이어서 응시" }),
       );
@@ -179,41 +153,38 @@ export async function render(page, { params, go }) {
         iconName: "stop",
         disabled: production.stopRequested,
       });
-    else if (p.stage === "generate" || p.stage === "audio")
-      cta = button(
-        p.groupsReady || p.segmentsReady ? "이어서 생성" : "생성 시작",
-        async () => {
-          await production.start(id, { fixed: e.fixed });
-          toast(production.message, "ok");
-        },
-        { kind: "primary", iconName: "sparkle", disabled: other || attempted },
-      );
+    else if (p.stage === "failed")
+      cta = button("실패 항목 다시 시도", start({ retryFailed: true }), {
+        kind: "primary",
+        iconName: "refresh",
+        disabled: other || attempted,
+      });
     else
       cta = button(
-        "검수할 항목 보기",
-        () => {
-          filter = "todo";
-          draw();
-          groupsBox.scrollIntoView({ behavior: "smooth" });
-        },
-        { kind: "primary", iconName: "eye" },
+        p.groupsReady || p.segmentsReady ? "이어서 생성" : "생성 시작",
+        start({ fixed: e.fixed }),
+        { kind: "primary", iconName: "sparkle", disabled: other || attempted },
       );
+    const status = mine
+      ? production.message
+      : other
+        ? "다른 회차를 제작 중입니다. 끝난 뒤 시작할 수 있어요."
+        : p.ready
+          ? "준비가 끝났습니다. 인터넷 없이 응시할 수 있어요. 문항과 정답은 시험을 마친 뒤 복습에서 공개됩니다."
+          : p.stage === "failed"
+            ? `${p.failed}개 항목을 만들지 못했습니다. 설정(엔진·키·할당량)을 확인한 뒤 다시 시도하세요.`
+            : "문항은 만들어지는 대로 다른 AI 호출이 다시 풀어 정답을 확인하고, 음원은 전사와 대본을 대조합니다. 언제든 멈추고 이어갈 수 있어요.";
     return card(
       { class: "pipeline" },
       h(
         "ol",
         { class: "steps" },
-        ...steps.map(([label, done, total, complete], i) =>
+        ...steps.map(([label, sub, done], i) =>
           h(
             "li",
-            { class: [complete && "done", !complete && i === steps.findIndex((s) => !s[3]) && "current"] },
-            h("span", { class: "step-dot" }, complete ? icon("check", 14) : String(i + 1)),
-            h(
-              "div",
-              {},
-              h("strong", { text: label }),
-              h("small", { text: total === null ? `${done}회 완료` : `${done} / ${total}` }),
-            ),
+            { class: [done && "done", i === current && "current"] },
+            h("span", { class: "step-dot" }, done ? icon("check", 14) : String(i + 1)),
+            h("div", {}, h("strong", { text: label }), h("small", { text: sub })),
           ),
         ),
       ),
@@ -224,24 +195,7 @@ export async function render(page, { params, go }) {
           "div",
           { class: "pipeline-status" },
           progress(p.percent, 100, p.ready ? "ok" : ""),
-          h("small", {
-            class: "muted",
-            text: mine
-              ? production.message
-              : other
-                ? "다른 회차를 제작 중입니다. 끝난 뒤 시작할 수 있어요."
-                : attempted && !p.ready
-                  ? "응시한 회차는 변경할 수 없습니다."
-                  : p.ready
-                    ? requiresReview(e) || p.hasAudio
-                      ? "검수가 끝났습니다. 인터넷 없이 응시할 수 있어요."
-                      : "AI 생성 문항입니다. 응시 후 복습에서 해설을 확인하세요."
-                    : p.groupsFailed || p.segmentsFailed
-                      ? `실패 ${p.groupsFailed + p.segmentsFailed}건 · '이어서 생성'으로 실패한 항목만 다시 시도합니다.`
-                      : p.stage === "review"
-                        ? "문항과 음원을 확인하고 승인하면 응시할 수 있어요."
-                        : "생성은 언제든 멈추고 이어갈 수 있어요. 완료된 항목은 저장됩니다.",
-          }),
+          h("small", { class: "muted", text: status }),
         ),
         cta,
       ),
@@ -308,6 +262,72 @@ export async function render(page, { params, go }) {
     );
   }
 
+  // ── Test mode only ────────────────────────────────────────────────────
+  function listenCard(e, p) {
+    if (!p.hasAudio) return h("div");
+    const slot = h("div", { class: "stack" });
+    return card(
+      { class: "test-card" },
+      h(
+        "div",
+        { class: "card-head" },
+        h("h2", {}, icon("headphones", 18), " 실전처럼 한 번에 듣기"),
+        chip("테스트 모드", "info"),
+      ),
+      h("p", {
+        class: "muted small",
+        text: "준비된 LC 음원 전체를 시험과 같은 순서·간격(구간 사이 0.35초, 묶음 뒤 문항당 5초)으로 이어 붙여 재생합니다.",
+      }),
+      h(
+        "div",
+        { class: "row" },
+        button(
+          p.segmentsReady ? `전체 듣기 (${p.segmentsReady}/${p.segments} 구간)` : "준비된 음원 없음",
+          () => {
+            slot.replaceChildren(
+              h("audio", {
+                controls: true,
+                autoplay: true,
+                preload: "auto",
+                src: `/api/listening/${id}.wav?t=${Date.now()}`,
+              }),
+            );
+          },
+          { kind: "primary", iconName: "play", disabled: !p.segmentsReady },
+        ),
+      ),
+      slot,
+    );
+  }
+
+  function groupsCard(e) {
+    return h(
+      "div",
+      { class: "groups" },
+      h(
+        "div",
+        { class: "groups-head" },
+        h("h2", {}, "문항 · 음원 점검 ", chip("테스트 모드", "info")),
+        segmented(
+          [
+            ["all", "전체"],
+            ["failed", "실패"],
+          ],
+          filter,
+          (v) => ((filter = v), draw()),
+        ),
+      ),
+      ...e.groups
+        .filter(
+          (g) =>
+            filter === "all" ||
+            g.status === "failed" ||
+            (g.segments ?? []).some((s) => s.status === "failed"),
+        )
+        .map((g) => groupCard(g)),
+    );
+  }
+
   function groupCard(g) {
     const audio = isAudioGroup(e, g);
     const segs = g.segments ?? [];
@@ -316,7 +336,6 @@ export async function render(page, { params, go }) {
       open: open.has(g.id),
       ontoggle: () => (details.open ? open.add(g.id) : open.delete(g.id)),
     });
-    const reviewed = segs.filter((s) => s.reviewed).length;
     details.append(
       h(
         "summary",
@@ -325,43 +344,53 @@ export async function render(page, { params, go }) {
           "div",
           { class: "group-title" },
           h("strong", { text: partLabel(e, g.part) }),
-          h("small", { class: "muted", text: `${g.id} · ${g.count}문항` }),
+          h("small", {
+            class: "muted",
+            text: `${g.id} · ${g.count}문항${g.tries ? ` · 시도 ${g.tries}` : ""}`,
+          }),
         ),
         h(
           "div",
           { class: "chips" },
           chip(
-            g.status === "ready" ? "문항 준비" : g.status === "failed" ? "생성 실패" : "대기",
+            g.status === "ready"
+              ? g.verified
+                ? "자동 검증 통과"
+                : "준비"
+              : g.status === "failed"
+                ? "생성 실패"
+                : "대기",
             g.status === "ready" ? "ok" : g.status === "failed" ? "danger" : "",
           ),
-          g.status === "ready" && requiresReview(e)
-            ? chip(g.reviewed ? "문항 검수 ✓" : "문항 검수 전", g.reviewed ? "ok" : "warn")
-            : null,
           audio && segs.length
             ? chip(
-                `음원 ${segs.filter((s) => s.status === "ready").length}/${segs.length} · 검수 ${reviewed}`,
-                reviewed === segs.length ? "ok" : segs.some((s) => s.status === "failed") ? "danger" : "",
+                `음원 ${segs.filter((s) => s.status === "ready").length}/${segs.length}`,
+                segs.some((s) => s.status === "failed")
+                  ? "danger"
+                  : segs.every((s) => s.status === "ready")
+                    ? "ok"
+                    : "",
               )
             : null,
         ),
       ),
     );
-    if (!details.open) {
-      details.addEventListener(
-        "toggle",
-        () => details.open && details.childElementCount === 1 && details.append(groupBody(g)),
-        { once: false },
-      );
-      return details;
-    }
-    details.append(groupBody(g));
+    const fill = () => details.childElementCount === 1 && details.append(groupBody(g));
+    if (details.open) fill();
+    else details.addEventListener("toggle", () => details.open && fill());
     return details;
   }
 
   function groupBody(g) {
     const audio = isAudioGroup(e, g);
     const body = h("div", { class: "group-body" });
-    if (g.error) body.append(h("p", { class: "error-text", text: g.error }));
+    if (g.error || g.lastError)
+      body.append(
+        h("p", {
+          class: "error-text",
+          text: [g.error, g.lastError && `마지막 내부 오류: ${g.lastError}`].filter(Boolean).join(" · "),
+        }),
+      );
     if (g.image || g.graphic)
       body.append(
         h("img", { class: "figure", src: g.image || g.graphic, alt: g.imageAlt || g.graphicAlt || "" }),
@@ -369,18 +398,11 @@ export async function render(page, { params, go }) {
           ? h(
               "div",
               { class: "row" },
-              h("small", { class: "muted", text: "보관함 사진 · " + g.photoName }),
+              h("small", { class: "muted", text: "내장 사진 · " + g.photoName }),
               e.photoPart1 && !e.attempts.length
                 ? button(
                     "다른 사진으로 교체",
-                    async () => {
-                      const ok = await confirmDialog({
-                        title: "이 문항의 사진을 바꿀까요?",
-                        body: "보관함에서 이 회차와 겹치지 않는 사진을 골라 넣고, 이 문항과 음원은 다시 생성합니다.",
-                        confirm: "교체",
-                      });
-                      if (ok) replaceEpisode(await api("episodes/swap-photo", { id, groupId: g.id }));
-                    },
+                    async () => replaceEpisode(await api("episodes/swap-photo", { id, groupId: g.id })),
                     { small: true, iconName: "refresh", kind: "ghost", disabled: production.running },
                   )
                 : null,
@@ -410,45 +432,13 @@ export async function render(page, { params, go }) {
           h("p", { class: "explain", text: q.explanation }),
         ),
       );
-    const attempted = e.attempts.length > 0;
-    if (g.status === "ready" && requiresReview(e))
-      body.append(
-        h(
-          "div",
-          { class: "row" },
-          button(
-            g.reviewed ? "문항 검수 취소" : "문항·정답·지문 확인 완료",
-            async () => replaceEpisode(await api("review", { id, groupId: g.id, approved: !g.reviewed })),
-            { kind: g.reviewed ? "" : "primary", iconName: "check", small: true, disabled: attempted },
-          ),
-        ),
-      );
-    if (audio && g.segments?.length) {
-      const verified = g.segments.filter((s) => s.status === "ready" && s.diff?.exact && !s.reviewed).length;
-      body.append(
-        h(
-          "div",
-          { class: "seg-head" },
-          h("h4", { text: "Live 음원" }),
-          verified
-            ? button(
-                `전사 일치 ${verified}개 일괄 승인`,
-                async () =>
-                  replaceEpisode(
-                    await api("review", { id, groupId: g.id, segments: "verified", approved: true }),
-                  ),
-                { small: true, iconName: "check", disabled: attempted },
-              )
-            : null,
-        ),
-        ...g.segments.map((s) => segmentView(g, s, attempted)),
-      );
-    }
+    if (audio && g.segments?.length)
+      body.append(h("h4", { text: "Live 음원" }), ...g.segments.map((s) => segmentView(g, s)));
     return body;
   }
 
-  function segmentView(g, s, attempted) {
-    const box = h("div", { class: ["segment", "seg-" + s.status, s.reviewed && "is-reviewed"] });
+  function segmentView(g, s) {
+    const box = h("div", { class: ["segment", "seg-" + s.status] });
     box.append(
       h(
         "div",
@@ -456,14 +446,14 @@ export async function render(page, { params, go }) {
         chip(s.speaker === "narrator" ? "내레이터" : "화자 " + s.speaker),
         h("small", { class: "muted", text: s.id }),
         s.attempts > 1 ? chip(`${s.attempts}회차 낭독`, "warn") : null,
-        s.reviewed ? chip("검수 ✓", "ok") : null,
       ),
       h("p", { class: "script", text: s.text }),
     );
-    if (s.status === "ready") {
-      box.append(h("audio", { controls: true, preload: "none", src: s.audio }));
-      box.append(diffView(s.diff, s.transcript));
-    }
+    if (s.status === "ready")
+      box.append(
+        h("audio", { controls: true, preload: "none", src: s.audio }),
+        diffView(s.diff, s.transcript),
+      );
     if (s.status === "failed") {
       box.append(h("p", { class: "error-text", text: s.error || "생성 실패" }));
       if (s.lastTake)
@@ -472,41 +462,32 @@ export async function render(page, { params, go }) {
           diffView(s.lastTake.diff, s.lastTake.transcript),
         );
     }
-    const actions = h("div", { class: "row" });
-    if (s.status === "ready")
-      actions.append(
-        button(
-          s.reviewed ? "승인 취소" : "직접 듣고 승인",
-          async () =>
-            replaceEpisode(
-              await api("review", { id, groupId: g.id, segmentId: s.id, approved: !s.reviewed }),
-            ),
-          { small: true, kind: s.reviewed ? "" : "primary", iconName: "check", disabled: attempted },
+    if (!e.attempts.length && (s.status === "ready" || s.status === "failed"))
+      box.append(
+        h(
+          "div",
+          { class: "row" },
+          button(
+            "이 구간만 다시 낭독",
+            async () => {
+              await production.start(id, { retrySegment: s.id });
+              await reload();
+            },
+            { small: true, iconName: "refresh", disabled: production.running },
+          ),
         ),
       );
-    if (s.status === "ready" || s.status === "failed")
-      actions.append(
-        button(
-          "이 구간만 다시 낭독",
-          async () => {
-            await production.start(id, { retrySegment: s.id });
-            await reload();
-          },
-          { small: true, iconName: "refresh", disabled: attempted || production.running },
-        ),
-      );
-    box.append(actions);
     return box;
   }
 
+  let timer;
   const unsubscribe = onChange((what) => {
     if (what !== "production" || production.episodeId !== id) return;
     clearTimeout(timer);
     timer = setTimeout(() => reload().catch(() => {}), 150);
   });
-  let timer;
   draw();
-  page.append(head, pipeline, history, groupsBox);
+  page.append(head, pipeline, history, inspector);
   return () => {
     unsubscribe();
     clearTimeout(timer);
@@ -559,5 +540,3 @@ export function diffView(diff, transcript) {
   wrap.append(h("small", { class: "muted transcript", text: "전사: " + (transcript || "없음") }));
   return wrap;
 }
-
-export { LETTERS };

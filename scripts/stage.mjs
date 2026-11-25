@@ -8,6 +8,12 @@ await mkdir(base + "/app", { recursive: true });
 await mkdir(base + "/ui", { recursive: true });
 await cp("public", base + "/app/public", { recursive: true });
 await cp("src", base + "/app/src", { recursive: true });
+await cp("assets", base + "/app/assets", { recursive: true });
+const release = process.env.MARK_BUILD_CHANNEL === "release";
+await writeFile(
+  base + "/app/src/build-info.mjs",
+  `// Staged ${release ? "release" : "test"} build.\nexport const TEST_MODE = ${!release};\n`,
+);
 await cp("public/index.html", base + "/ui/index.html");
 
 let size = 0;
@@ -16,14 +22,18 @@ async function walk(path) {
     const name = join(path, item.name);
     if (item.isDirectory()) await walk(name);
     else {
-      if (/\.(mp3|wav|ogg|jpe?g)$/i.test(name) || /electron|codex\.exe/i.test(name))
+      const bundledPhoto = /[\\/]assets[\\/]part1-photos[\\/][0-9a-f]{16}\.jpg$/.test(name);
+      if ((/\.(mp3|wav|ogg|jpe?g)$/i.test(name) && !bundledPhoto) || /electron|codex\.exe/i.test(name))
         throw Error("Forbidden bundled payload: " + name);
       size += (await stat(name)).size;
     }
   }
 }
 await walk(base + "/app");
-console.log("Staged app bytes (no Electron, audio, photos or Codex): " + size);
+console.log(
+  `Staged ${release ? "release" : "test"} app bytes (bundled Part 1 photos, no Electron, audio or Codex): ` +
+    size,
+);
 
 const trust = process.env.MARK_UPDATE_PUBLIC_KEY;
 if (trust) {

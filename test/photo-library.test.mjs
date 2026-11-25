@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PhotoLibrary, hamming, sameScene } from "../src/photo-library.mjs";
@@ -13,45 +14,59 @@ const jpeg = (n) =>
 const hash = (scene, variant = 0) =>
   (BigInt.asUintN(64, BigInt(scene) * 0x9e3779b97f4a7c15n) ^ BigInt(variant)).toString(16).padStart(16, "0");
 
-async function library(t) {
+async function library(t, entries) {
   const root = await mkdtemp(join(tmpdir(), "ml-photos-"));
   t.after(() => rm(root, { recursive: true, force: true }));
-  return { root, lib: new PhotoLibrary(join(root, "photos")) };
+  const dir = join(root, "bundle");
+  await mkdir(dir, { recursive: true });
+  const photos = [];
+  for (const { name, n, dhash } of entries) {
+    const bytes = Buffer.from(jpeg(n), "base64");
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    await writeFile(join(dir, sha256.slice(0, 16) + ".jpg"), bytes);
+    photos.push({ file: sha256.slice(0, 16) + ".jpg", sha256, name, dhash });
+  }
+  photos.push({ file: "../escape.jpg", sha256: "0".repeat(64), name: "bad", dhash: null });
+  await writeFile(join(dir, "index.json"), JSON.stringify({ schema: 1, photos }));
+  return { root, dir, lib: new PhotoLibrary(dir) };
 }
 
-test("library imports JPEGs once, rejects non-JPEG data and removes photos", async (t) => {
-  const { lib } = await library(t);
-  const r = await lib.import([
-    { name: "Worker_pressing_stapler", data: jpeg(1), dhash: hash(1) },
-    { name: "copy", data: jpeg(1), dhash: hash(1) },
-    { name: "Two_workers", data: jpeg(2), dhash: hash(2) },
+test("bundled library lists valid entries only and verifies photo bytes", async (t) => {
+  const { lib, dir } = await library(t, [
+    { name: "Worker pressing stapler", n: 1, dhash: hash(1) },
+    { name: "Two workers folding", n: 2, dhash: hash(2) },
   ]);
-  assert.deepEqual(r, { added: 2, duplicates: 1, total: 2 });
-  await assert.rejects(
-    lib.import([{ name: "png", data: Buffer.from("\x89PNG....").toString("base64") }]),
-    /JPEG/,
-  );
-  await assert.rejects(lib.import([]), /1~12/);
-  const [first] = await lib.list();
-  assert.equal((await lib.read(first.sha256)).length, 44);
-  assert.deepEqual(await lib.remove([first.sha256]), { removed: 1, total: 1 });
+  const list = await lib.list();
+  assert.equal(list.length, 2);
+  assert.equal((await lib.read(list[0].sha256)).length, 44);
+  await writeFile(join(dir, list[1].file), "tampered");
+  await assert.rejects(new PhotoLibrary(dir).read(list[1].sha256), /손상/);
+  await assert.rejects(lib.read("f".repeat(64)), /찾을 수 없/);
 });
 
 test("picking never places two variants of the same scene together and prefers unused photos", async (t) => {
-  const { lib } = await library(t);
+  const entries = [];
   for (let s = 1; s <= 6; s++)
-    await lib.import([
-      { name: `s${s}-a`, data: jpeg(s), dhash: hash(s) },
-      { name: `s${s}-b`, data: jpeg(s + 100), dhash: hash(s, 1) },
-    ]);
+    entries.push(
+      { name: `s${s}-a`, n: s, dhash: hash(s) },
+      { name: `s${s}-b`, n: s + 100, dhash: hash(s, 1) },
+    );
+  const { lib } = await library(t, entries);
   assert.equal(hamming(hash(3), hash(3, 1)), 1);
   const picked = await lib.pick(6);
-  const scenes = picked.map((p) => p.name.split("-")[0]);
-  assert.equal(new Set(scenes).size, 6);
+  assert.equal(new Set(picked.map((p) => p.name.split("-")[0])).size, 6);
   await assert.rejects(lib.pick(7), /부족/);
   const all = await lib.list();
   const usage = new Map(all.filter((p) => p.name.endsWith("a")).map((p) => [p.sha256, 3]));
   assert.ok((await lib.pick(6, usage)).every((p) => p.name.endsWith("b")));
+});
+
+test("the shipped photo set is complete and has no unreadable files", async () => {
+  const lib = new PhotoLibrary(new URL("../assets/part1-photos/", import.meta.url).pathname);
+  const list = await lib.list();
+  assert.ok(list.length >= 100, "expected the bundled Part 1 photo set");
+  for (const p of list.slice(0, 5)) assert.ok((await lib.read(p.sha256)).length > 1000);
+  assert.equal((await lib.pick(6)).length, 6);
 });
 
 test("codex attaches photos with --image before reading the prompt from stdin", async () => {
@@ -80,19 +95,25 @@ test("codex attaches photos with --image before reading the prompt from stdin", 
   assert.equal(args.at(-1), "-");
 });
 
-test("TOEIC episodes take Part 1 photos from the library and require a vision engine (no illustration fallback)", async (t) => {
-  const { root } = await library(t);
+test("TOEIC Part 1 uses bundled photos, swaps a photo that fails validation and never falls back", async (t) => {
+  const { root, dir } = await library(
+    t,
+    [1, 2, 3, 4].map((s) => ({ name: "scene " + s, n: s, dhash: hash(s) })),
+  );
   const updater = { status: async () => ({ supported: false }), executable: async () => null };
   const visionCalls = [];
+  let rejectNext = 1;
   const generate = async ({ prompt, images, provider }) => {
     visionCalls.push({ provider, images: images?.length ?? 0 });
-    if (prompt.includes("Independently classify"))
+    if (prompt.includes("Independently classify")) {
+      const ok = rejectNext-- <= 0;
       return JSON.stringify({
         labels: ["true", "false", "false", "false"],
-        ambiguous: false,
+        ambiguous: !ok,
         duplicate: false,
         evidence: "사진 근거",
       });
+    }
     return JSON.stringify({
       choices: [
         "A man is using a stapler.",
@@ -103,7 +124,7 @@ test("TOEIC episodes take Part 1 photos from the library and require a vision en
       answer: 0,
     });
   };
-  const { server } = await buildServer({ root, updater, autoUpdate: false, generate });
+  const { server } = await buildServer({ root, photoRoot: dir, updater, autoUpdate: false, generate });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   t.after(() => {
     server.closeAllConnections();
@@ -119,53 +140,89 @@ test("TOEIC episodes take Part 1 photos from the library and require a vision en
     });
     return { status: r.status, data: await r.json() };
   };
-  assert.match(
-    (await post("episodes", { exam: "toeic", counts: { 1: 2 }, part1: "photos" })).data.error,
-    /부족/,
-  );
-  await post("photos/import", {
-    items: [1, 2, 3].map((s) => ({ name: "scene " + s, data: jpeg(s), dhash: hash(s) })),
-  });
-  const listed = (await (await fetch(base + "/api/photos")).json()).photos;
-  assert.equal(listed.length, 3);
-  assert.equal((await fetch(`${base}/api/photos/${listed[0].sha256}.jpg`)).status, 200);
+  for (const removed of ["photos", "photos/x.jpg"])
+    assert.equal((await fetch(base + "/api/" + removed)).status, 404);
+  assert.equal((await post("photos/import", { items: [] })).status, 404);
+  assert.match((await post("episodes", { exam: "toeic", counts: { 1: 5 } })).data.error, /부족/);
 
-  const { data: e } = await post("episodes", { exam: "toeic", counts: { 1: 2, 5: 0 }, part1: "photos" });
+  const { data: e } = await post("episodes", { exam: "toeic", counts: { 1: 2 } });
   assert.equal(e.photoPart1, true);
   assert.ok(e.groups.every((g) => g.photoHash && g.image.startsWith("/api/photo/")));
   assert.equal((await fetch(base + e.groups[0].image)).status, 200);
 
-  // Default vision engine is Codex, which is not installed in this test → clear failure, no fallback.
   await post("settings", { visionProvider: "gemini" });
   const missingKey = await post("produce", { id: e.id });
-  assert.equal(missingKey.status, 502);
+  assert.equal(missingKey.status, 400);
   assert.match(missingKey.data.error, /사진 문항 엔진/);
   await post("settings", { keyProvider: "gemini", apiKey: "MOCK-KEY" });
-  let r;
-  do r = await post("produce", { id: e.id });
-  while (r.data.more && r.data.episode.groups.some((g) => g.status !== "ready"));
+  const firstPhoto = e.groups[0].photoHash;
+  let r = await post("produce", { id: e.id });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.episode.groups[0].status, "pending", "a rejected photo is retried internally");
+  assert.notEqual(r.data.episode.groups[0].photoHash, firstPhoto, "with a different bundled photo");
+  while (r.data.episode.groups.some((g) => g.status !== "ready")) r = await post("produce", { id: e.id });
   const ready = r.data.episode;
-  assert.ok(ready.groups.every((g) => g.status === "ready" && g.questions[0].part === 1));
-  assert.equal(ready.groups[0].segments.length, 1);
+  assert.ok(ready.groups.every((g) => g.verified && g.questions[0].part === 1));
   assert.match(ready.groups[0].segments[0].text, /^A\. A man is using a stapler\.\nB\./);
-  // Second photo is compared against the first one for scene duplicates.
-  assert.deepEqual(
-    visionCalls.map((c) => c.images),
-    [1, 1, 1, 2],
-  );
   assert.ok(visionCalls.every((c) => c.provider === "gemini"));
+  assert.equal(new Set(ready.groups.map((g) => g.photoHash)).size, 2);
+});
 
-  // The next episode prefers the unused third photo.
-  const { data: next } = await post("episodes", { exam: "toeic", counts: { 1: 1 }, part1: "photos" });
-  const unused = listed.find((p) => !e.groups.some((g) => g.photoHash === p.sha256));
-  assert.equal(next.groups[0].photoHash, unused.sha256);
-
-  // A photo can be swapped for another one that does not repeat a scene already in the episode.
-  await post("photos/import", { items: [{ name: "scene 4", data: jpeg(4), dhash: hash(4) }] });
-  const swapped = (await post("episodes/swap-photo", { id: next.id, groupId: next.groups[0].id })).data;
-  assert.notEqual(swapped.groups[0].photoHash, next.groups[0].photoHash);
-  assert.equal(swapped.groups[0].status, "pending");
-  assert.equal((await post("episodes/swap-photo", { id: e.id, groupId: "p5-1" })).status, 400);
+test("text groups are re-solved by a separate call and regenerated when the key does not match", async (t) => {
+  const { root, dir } = await library(t, []);
+  const updater = { status: async () => ({ supported: false }), executable: async () => null };
+  let solves = 0;
+  const generate = async ({ prompt }) => {
+    if (prompt.includes("independently checking")) {
+      assert.equal(prompt.includes("explanation"), false);
+      return JSON.stringify({ answers: [solves++ === 0 ? 2 : 1] });
+    }
+    return JSON.stringify({
+      questions: [
+        {
+          question: "The report was _____ by Friday.",
+          choices: ["complete", "completed", "completing", "completes"],
+          answer: 1,
+          explanation: "수동태",
+        },
+      ],
+    });
+  };
+  const { server } = await buildServer({
+    root,
+    photoRoot: dir,
+    updater,
+    autoUpdate: false,
+    generate,
+    testMode: false,
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  t.after(() => {
+    server.closeAllConnections();
+    server.close();
+  });
+  const base = "http://127.0.0.1:" + server.address().port;
+  const session = await (await fetch(base + "/api/session")).json();
+  assert.equal(session.testMode, false);
+  const post = async (path, data) =>
+    (
+      await fetch(base + "/api/" + path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Mark-Session": session.token },
+        body: JSON.stringify(data),
+      })
+    ).json();
+  await post("settings", { textProvider: "gemini", keyProvider: "gemini", apiKey: "MOCK-KEY" });
+  const e = await post("episodes", { exam: "toeic", counts: { 5: 1 } });
+  let r = await post("produce", { id: e.id });
+  assert.equal(r.episode.groups[0].status, "pending");
+  assert.match(r.episode.groups[0].lastError, /정답 불일치/);
+  r = await post("produce", { id: e.id });
+  assert.equal(r.episode.groups[0].status, "ready");
+  assert.equal(r.episode.groups[0].tries, 2);
+  // Release builds expose no test-only routes.
+  assert.equal((await fetch(`${base}/api/listening/${e.id}.wav`)).status, 404);
+  assert.equal((await post("episodes/swap-photo", { id: e.id, groupId: "p5-1" })).error, "API 없음");
 });
 
 test("scene variants are matched by descriptive names even when pixels differ", () => {

@@ -2,7 +2,7 @@ import { h, icon, card, chip, progress, empty, fmtDate, fmtClock } from "./dom.m
 import { api, loadLibrary } from "./api.mjs";
 import { scoreBars } from "./lux-bars.mjs";
 import { studyHeatmap } from "./lux-heat.mjs";
-import { EXAMS } from "../lib/exams.mjs";
+import { EXAMS, visibleExams } from "../lib/exams.mjs";
 import {
   progressOf,
   openAttempt,
@@ -13,6 +13,11 @@ import {
   STAGE_KIND,
   partsSummary,
 } from "./model.mjs";
+
+const sectionPercent = (a, id) => {
+  const s = a.summary?.bySection?.[id] ?? a.summary?.[id];
+  return s?.total ? Math.round((s.correct / s.total) * 1000) / 10 : null;
+};
 
 export async function render(page, { go }) {
   const [episodes, notebook] = await Promise.all([
@@ -182,7 +187,7 @@ export async function render(page, { go }) {
   const hallCards = h(
     "div",
     { class: "hall-mini" },
-    ...Object.values(EXAMS).map((x) =>
+    ...visibleExams().map((x) =>
       h(
         "a",
         { class: "hall-chip hall-" + x.id, href: "#/create/" + x.id },
@@ -212,7 +217,7 @@ export async function render(page, { go }) {
     page.append(
       empty(
         "아직 회차가 없어요",
-        "TOEIC관에서는 LC 음원까지, 객관식 시험관에서는 기사 필기 같은 과목형 시험을 만들 수 있어요.",
+        "TOEIC관에서 전체 200문항이나 파트별 회차를 만들면 음원까지 준비된 뒤 인터넷 없이 풀 수 있어요.",
         h("a", { class: "btn btn-primary", href: "#/halls", text: "시험관으로" }),
       ),
     );

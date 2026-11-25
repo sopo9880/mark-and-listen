@@ -1,12 +1,20 @@
 import { h, icon, card, button, field, select, segmented, toast } from "./dom.mjs";
-import { api, production } from "./api.mjs";
-import { EXAMS, CBT_PRESETS, blueprint, cbtConfig, cbtBlueprint, phaseDurations } from "../lib/exams.mjs";
+import { api, production, state } from "./api.mjs";
+import {
+  EXAMS,
+  CBT_PRESETS,
+  blueprint,
+  cbtConfig,
+  cbtBlueprint,
+  phaseDurations,
+  visibleExams,
+} from "../lib/exams.mjs";
 import { fmtMinutes } from "./dom.mjs";
 
 export async function render(page, { params, go }) {
   const which = params[0];
-  if (which === "toeic") return toeicForm(page, go, (await api("photos")).photos);
-  if (which === "cbt") return cbtForm(page, go);
+  if (which === "toeic") return toeicForm(page, go);
+  if (which === "cbt" && (!EXAMS.cbt.hidden || state.testMode)) return cbtForm(page, go);
   page.append(
     h(
       "header",
@@ -25,7 +33,7 @@ export async function render(page, { params, go }) {
     h(
       "div",
       { class: "halls" },
-      ...Object.values(EXAMS).map((x) =>
+      ...(state.testMode ? Object.values(EXAMS) : visibleExams()).map((x) =>
         h(
           "a",
           { class: "hall hall-" + x.id, href: "#/create/" + x.id },
@@ -77,7 +85,7 @@ function header(title, sub) {
   );
 }
 
-function toeicForm(page, go, library) {
+function toeicForm(page, go) {
   const spec = EXAMS.toeic.parts;
   const counts = Object.fromEntries(Object.entries(spec).map(([p, s]) => [p, s.count]));
   let scope = "full";
@@ -89,8 +97,6 @@ function toeicForm(page, go, library) {
     maxLength: 100,
   });
   const partArea = h("div");
-  const part1Box = h("div");
-  let part1 = library.length >= 6 ? "photos" : "illustrations";
   const summary = h("div", { class: "summary" });
   const inputs = {};
 
@@ -184,25 +190,16 @@ function toeicForm(page, go, library) {
     const durations = groups.length
       ? phaseDurations({ exam: "toeic", groups, config: {} })
       : { LC: 0, RC: 0 };
-    const photoShort = !!counts[1] && part1 === "photos" && library.length < counts[1];
     const segments = groups.reduce((n, g) => n + (g.part <= 2 ? g.count : g.part <= 4 ? g.count + 5 : 0), 0);
     summary.replaceChildren(
       h("h3", { text: "회차 요약" }),
       line("총 문항", `${lc + rc}문항`),
       line("Listening", lc ? `${lc}문항 · ${fmtMinutes(durations.LC)}` : "없음"),
       line("Reading", rc ? `${rc}문항 · ${fmtMinutes(durations.RC)}` : "없음"),
-      line("AI 출제 요청", `${groups.length}회`),
-      counts[1]
-        ? line("Part 1 자료", part1 === "photos" ? `보관함 사진 ${counts[1]}장` : "연습용 삽화")
-        : null,
+      line("AI 요청", `약 ${groups.length * 2}회 (출제 + 자동 검증)`),
+      counts[1] ? line("Part 1 사진", `내장 사진 ${counts[1]}장 자동 배정`) : null,
       line("Live 낭독 구간", lc ? `약 ${segments}개` : "없음"),
       error ? h("p", { class: "error-text", text: error }) : null,
-      photoShort
-        ? h("p", {
-            class: "error-text",
-            text: `보관함 사진이 부족합니다. (${library.length}/${counts[1]}장)`,
-          })
-        : null,
       h("p", {
         class: "muted small",
         text: "연습용 창작 문항이며 공식 TOEIC과 무관합니다. 점수는 원점수(정답 수)로만 표시합니다.",
@@ -210,40 +207,13 @@ function toeicForm(page, go, library) {
       button(
         "회차 만들기",
         async () => {
-          const e = await api("episodes", { exam: "toeic", counts, title: title.value, part1 });
-          toast("회차를 만들었어요. 제작 스튜디오에서 생성을 시작하세요.", "ok");
+          const e = await api("episodes", { exam: "toeic", counts, title: title.value });
+          toast("회차를 만들었어요. 문항 생성을 시작합니다.", "ok");
           go("episode/" + e.id);
+          production.start(e.id).catch((err) => toast(err.message, "error"));
         },
-        { kind: "primary", iconName: "plus", disabled: !!error || photoShort },
+        { kind: "primary", iconName: "plus", disabled: !!error },
       ),
-    );
-    part1Box.replaceChildren(
-      counts[1]
-        ? h(
-            "div",
-            { class: "part1-source" },
-            field(
-              "Part 1 사진 자료",
-              segmented(
-                [
-                  ["photos", `사진 보관함 (${library.length}장)`],
-                  ["illustrations", "연습용 삽화"],
-                ],
-                part1,
-                (v) => ((part1 = v), refresh()),
-              ),
-              part1 === "photos"
-                ? "덜 쓴 사진부터, 같은 장면의 변형 사진은 겹치지 않게 배정합니다. 설정의 ‘사진 문항 엔진’이 사진을 직접 보고 문항을 만든 뒤 따로 검증합니다."
-                : "설치본에 포함된 삽화 6개를 돌려 씁니다.",
-            ),
-            h(
-              "a",
-              { class: "btn btn-sm", href: "#/photos" },
-              icon("halls", 15),
-              h("span", { text: "보관함 관리" }),
-            ),
-          )
-        : null,
     );
   };
 
@@ -276,9 +246,8 @@ function toeicForm(page, go, library) {
             ),
           ),
           partArea,
-          part1Box,
         ),
-        labs(go),
+        state.testMode ? labs(go) : null,
       ),
       h("aside", { class: "card sticky" }, summary),
     ),
@@ -309,12 +278,6 @@ function labs(go) {
       button("Part 3 · 화자 전환", () => fixed({ 3: 3 }, "고정 대본 · Part 3 화자 전환")),
       button("전체 LC 100문항", () => fixed({ 1: 6, 2: 25, 3: 39, 4: 30 }, "고정 대본 · 전체 LC")),
     ),
-    h("hr"),
-    h("p", {
-      class: "muted",
-      text: "Part 1 사진은 ‘사진 보관함’에 ZIP을 가져오면 일반 회차에 자동으로 배정됩니다. 사진은 이 PC에만 저장됩니다.",
-    }),
-    h("a", { class: "btn btn-sm", href: "#/photos", text: "사진 보관함 열기" }),
   );
 }
 

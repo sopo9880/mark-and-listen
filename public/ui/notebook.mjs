@@ -177,15 +177,6 @@ export async function render(page) {
         scope,
         (v) => ((scope = v), draw()),
       ),
-      segmented(
-        [
-          ["all", "모든 시험관"],
-          ["toeic", "TOEIC"],
-          ["cbt", "객관식"],
-        ],
-        exam,
-        (v) => ((exam = v), draw()),
-      ),
     ),
     list,
   );

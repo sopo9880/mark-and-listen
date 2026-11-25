@@ -213,6 +213,7 @@ test("server: rename, notebook mastery, delete and static UI modules", async (t)
   t.after(() => rm(root, { recursive: true, force: true }));
   const updater = { status: async () => ({ supported: false }), executable: async () => null };
   const generate = async ({ prompt }) => {
+    if (prompt.includes("independently checking")) return JSON.stringify({ answers: [0, 0, 0] });
     const n = Number(/exactly (\d+) original/.exec(prompt)[1]);
     return JSON.stringify(cbtQuestions(n));
   };
@@ -276,4 +277,34 @@ test("a damaged episode file does not hide the rest of the library", async (t) =
   await store.create({ counts: { 5: 2 } });
   await writeFile(join(root, "broken.json"), "{not json");
   assert.equal((await store.list()).length, 1);
+});
+
+test("test mode joins the listening section into one WAV with the exam's pauses", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "ml-listen-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const { fixedGroup } = await import("../src/episode-content.mjs");
+  const { wavFromPcm } = await import("../src/gemini-live.mjs");
+  const updater = { status: async () => ({ supported: false }), executable: async () => null };
+  const { server, store } = await buildServer({ root, updater, autoUpdate: false, testMode: true });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  t.after(() => {
+    server.closeAllConnections();
+    server.close();
+  });
+  const e = await store.create({ counts: { 2: 2 }, fixed: true });
+  e.groups = e.groups.map(fixedGroup);
+  for (const g of e.groups)
+    for (const s of g.segments)
+      await store.saveAudio(e, s, {
+        wav: wavFromPcm([Buffer.alloc(4800, 1)], 4800, 24000),
+        transcript: s.text,
+      });
+  await store.write(e);
+  const res = await fetch(`http://127.0.0.1:${server.address().port}/api/listening/${e.id}.wav`);
+  assert.equal(res.status, 200);
+  const wav = Buffer.from(await res.arrayBuffer());
+  // Two 0.1 s segments; the second starts after 0.1 s + 0.35 s pause + 1 question × 5 s of answer time.
+  const expectedSamples = Math.round(5.45 * 24000) + 2400;
+  assert.equal((wav.length - 44) / 2, expectedSamples);
+  assert.equal(wav.readUInt32LE(24), 24000);
 });

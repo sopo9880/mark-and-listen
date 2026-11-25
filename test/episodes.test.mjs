@@ -226,7 +226,7 @@ test("server preserves success after quota, retries only failed segment, never m
   assert.equal(JSON.stringify(failure).includes("SECRET"), false);
   let saved = await store.read(e.id);
   assert.equal(saved.groups[0].segments[0].status, "ready");
-  assert.equal(saved.groups[1].segments[0].status, "failed");
+  assert.equal(saved.groups[1].segments[0].status, "pending");
   // Reopen process: successful fragments survive, volatile API credentials do not.
   server.closeAllConnections();
   await new Promise((r) => server.close(r));

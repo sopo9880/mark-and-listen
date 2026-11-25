@@ -27,7 +27,6 @@ export const EXAMS = {
       RC: { label: "Reading", fullSeconds: 4500, fullCount: 100, audio: false },
     },
     parts: toeicParts,
-    requireReview: true,
   },
   cbt: {
     id: "cbt",
@@ -39,7 +38,8 @@ export const EXAMS = {
     language: "ko",
     sections: { CBT: { label: "필기", audio: false } },
     parts: null,
-    requireReview: false,
+    // Not offered in the app for now; the engine stays so episodes and tests keep working.
+    hidden: true,
   },
 };
 
@@ -189,25 +189,22 @@ export function migrateEpisode(e) {
   return e;
 }
 
-export function requiresReview(e) {
-  return e.config?.requireReview ?? examOf(e).requireReview;
-}
-
-/** True when every question group and every required audio segment is generated (and reviewed when required). */
+/**
+ * True when every question group passed its internal check and every listening segment has verified audio.
+ * Users never review generated content themselves; verification runs inside the production pipeline.
+ */
 export function readyToTake(e) {
-  const review = requiresReview(e);
   return (
     e.groups.length > 0 &&
     e.groups.every(
       (g) =>
         g.status === "ready" &&
-        (!review || g.reviewed) &&
         (!isAudioGroup(e, g) ||
-          (g.segments.length > 0 &&
-            g.segments.every((s) => s.status === "ready" && s.reviewed && s.duration > 0))),
+          (g.segments.length > 0 && g.segments.every((s) => s.status === "ready" && s.duration > 0))),
     )
   );
 }
+export const visibleExams = () => Object.values(EXAMS).filter((x) => !x.hidden);
 export const audioReady = readyToTake;
 
 export function phaseDurations(e) {

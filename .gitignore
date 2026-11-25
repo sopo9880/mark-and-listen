@@ -12,3 +12,5 @@ src-tauri/target/
 *.zip
 *.jpg
 *.jpeg
+
+!assets/part1-photos/*.jpg
