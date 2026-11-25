@@ -188,6 +188,7 @@ export async function buildServer({
     visionProvider: "codex",
     visionModel: "",
     sttModel: "",
+    sttMode: "auto", // auto: separate transcription, Live transcript if it stays busy · live: Live transcript only
   };
   try {
     settings = { ...settings, ...JSON.parse(await readFile(join(root, "settings.json"), "utf8")) };
@@ -206,9 +207,24 @@ export async function buildServer({
       wav,
       model: settings.sttModel || undefined,
       signal,
+      onRetry: (m) => log("info", m),
     });
-  const narrationChecks = (provider, signal) =>
-    audioChecks ? { duration: true, transcribe: (wav) => sttCall(provider, wav, signal) } : {};
+  const narrationChecks = (provider, signal) => {
+    if (!audioChecks) return {};
+    if (settings.sttMode === "live") return { duration: true };
+    return {
+      duration: true,
+      transcribe: async (wav) => {
+        try {
+          return await sttCall(provider, wav, signal);
+        } catch (err) {
+          if (!err.busy) throw err;
+          log("info", `전사 모델이 계속 바빠서 Live 자막과 길이 검사로 확인합니다 (${err.message})`);
+          return null;
+        }
+      },
+    };
+  };
   const connections = {};
   let loginTask = null;
   let uiReady = false,
@@ -475,6 +491,10 @@ export async function buildServer({
                 throw fail(400, "모델 ID 오류");
               settings[k] = b[k];
             }
+          if (b.sttMode !== undefined) {
+            if (!["auto", "live"].includes(b.sttMode)) throw fail(400, "전사 검증 방식 오류");
+            settings.sttMode = b.sttMode;
+          }
           if (typeof b.autoUpdate === "boolean") settings.autoUpdate = b.autoUpdate;
           await persist();
           send(res, { ok: true });

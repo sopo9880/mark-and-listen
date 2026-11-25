@@ -359,7 +359,9 @@ export async function verifiedNarration(speak, args, check = {}) {
         continue;
       }
     }
-    const transcript = check.transcribe ? await check.transcribe(take.wav) : take.transcript;
+    // transcribe() may return null when the transcription service is busy: the Live transcript is used then.
+    const heard = check.transcribe ? await check.transcribe(take.wav) : null;
+    const transcript = heard ?? take.transcript;
     const diff = transcriptDiff(args.prompt, transcript);
     if (diff.exact)
       return {
@@ -368,7 +370,7 @@ export async function verifiedNarration(speak, args, check = {}) {
         liveTranscript: take.transcript,
         diff,
         attempts: attempt + 1,
-        sttChecked: !!check.transcribe,
+        sttChecked: heard !== null,
       };
     last = { transcript, diff };
   }

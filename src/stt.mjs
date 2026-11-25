@@ -8,10 +8,10 @@ const INSTRUCTION =
   "Transcribe this English audio verbatim. Output only the words that are actually spoken, in order. No timestamps, speaker labels, notes or corrections. If nothing is spoken, output nothing.";
 const geminiModels = new Map();
 
-/** Picks the newest general Gemini Flash model that supports generateContent (audio input). */
-export async function geminiSttModel(apiKey, fetcher = fetch) {
+/** General Gemini Flash models that take audio input, newest first. */
+export async function geminiSttModels(apiKey, fetcher = fetch) {
   if (geminiModels.has(apiKey)) return geminiModels.get(apiKey);
-  let pick = "gemini-2.5-flash";
+  let names = [];
   try {
     const r = await fetcher(`${GEMINI}?pageSize=1000`, {
       headers: { "x-goog-api-key": apiKey },
@@ -19,24 +19,66 @@ export async function geminiSttModel(apiKey, fetcher = fetch) {
       signal: AbortSignal.timeout(20000),
     });
     if (r.ok) {
-      const names = ((await r.json()).models ?? [])
+      names = ((await r.json()).models ?? [])
         .filter((m) => m.supportedGenerationMethods?.includes("generateContent"))
         .map((m) => String(m.name).replace(/^models\//, ""))
         .filter((n) => /^gemini-\d+(?:\.\d+)?-flash(?:-\d+)?$/.test(n));
       const version = (n) => Number(/^gemini-(\d+(?:\.\d+)?)/.exec(n)[1]);
       names.sort((a, b) => version(b) - version(a) || a.length - b.length);
-      if (names[0]) pick = names[0];
     }
   } catch {
     // Fall back to the default name.
   }
-  geminiModels.set(apiKey, pick);
-  return pick;
+  if (!names.length) names = ["gemini-2.5-flash"];
+  geminiModels.set(apiKey, names);
+  return names;
 }
 
-export async function transcribeWav({ provider, apiKey, wav, model, fetcher = fetch, signal }) {
+/** Picks the newest general Gemini Flash model that supports generateContent (audio input). */
+export async function geminiSttModel(apiKey, fetcher = fetch) {
+  return (await geminiSttModels(apiKey, fetcher))[0];
+}
+
+const OVERLOADED = new Set([500, 502, 503, 504]);
+const wait = (ms, signal) =>
+  new Promise((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => (clearTimeout(t), reject(Error("cancelled"))), { once: true });
+  });
+
+export async function transcribeWav({
+  provider,
+  apiKey,
+  wav,
+  model,
+  fetcher = fetch,
+  signal,
+  onRetry,
+  pauses = [0, 2000, 6000],
+}) {
   if (provider === "gemini") {
-    const name = model || (await geminiSttModel(apiKey, fetcher));
+    // A busy model (5xx) is retried after a pause, then the next Flash model is tried.
+    const names = model ? [model] : (await geminiSttModels(apiKey, fetcher)).slice(0, 3);
+    let last;
+    for (const name of names)
+      for (const pause of pauses) {
+        if (pause) await wait(pause, signal);
+        try {
+          return await geminiTranscribe(name, apiKey, wav, fetcher, signal);
+        } catch (error) {
+          last = error;
+          if (!OVERLOADED.has(error.upstream)) throw error;
+          onRetry?.(`전사 모델 ${name} 응답 ${error.upstream} — ${pause ? "다시" : "잠시 뒤"} 시도`);
+        }
+      }
+    throw Object.assign(last, { busy: true });
+  }
+  if (provider !== "openai") throw Error("전사 검증 공급자 오류");
+  return openaiTranscribe({ apiKey, wav, model, fetcher, signal });
+}
+
+async function geminiTranscribe(name, apiKey, wav, fetcher, signal) {
+  {
     const r = await fetcher(`${GEMINI}/${encodeURIComponent(name)}:generateContent`, {
       method: "POST",
       headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
@@ -56,8 +98,9 @@ export async function transcribeWav({ provider, apiKey, wav, model, fetcher = fe
       }),
     });
     if (!r.ok)
-      throw Object.assign(Error(`전사 검증 요청 실패 (HTTP ${r.status})`), {
+      throw Object.assign(Error(`전사 검증 요청 실패 (${name} · HTTP ${r.status})`), {
         status: r.status === 429 ? 429 : 502,
+        upstream: r.status,
       });
     const data = await r.json();
     return (data.candidates?.[0]?.content?.parts ?? [])
@@ -65,7 +108,10 @@ export async function transcribeWav({ provider, apiKey, wav, model, fetcher = fe
       .join("")
       .trim();
   }
-  if (provider === "openai") {
+}
+
+async function openaiTranscribe({ apiKey, wav, model, fetcher, signal }) {
+  {
     const form = new FormData();
     form.append("file", new Blob([wav], { type: "audio/wav" }), "segment.wav");
     form.append("model", model || "gpt-transcribe");
@@ -83,7 +129,6 @@ export async function transcribeWav({ provider, apiKey, wav, model, fetcher = fe
       });
     return String((await r.json()).text ?? "").trim();
   }
-  throw Error("전사 검증 공급자 오류");
 }
 
 /**

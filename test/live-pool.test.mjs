@@ -112,3 +112,55 @@ test("narration is trimmed and leveled to the directions' loudness", () => {
   const quiet = wavFromPcm([Buffer.alloc(4800, 1)], 4800, rate);
   assert.equal(levelWav(quiet), quiet);
 });
+
+test("a busy transcription model is retried, then another Flash model; all busy falls back to the Live transcript", async () => {
+  const { transcribeWav } = await import("../src/stt.mjs");
+  const { verifiedNarration } = await import("../src/narration.mjs");
+  const calls = [];
+  const fetcher = async (url) => {
+    if (url.includes("?pageSize"))
+      return {
+        ok: true,
+        json: async () => ({
+          models: [
+            { name: "models/gemini-3.8-flash", supportedGenerationMethods: ["generateContent"] },
+            { name: "models/gemini-3.1-flash", supportedGenerationMethods: ["generateContent"] },
+          ],
+        }),
+      };
+    calls.push(url.split("/models/")[1]);
+    if (url.includes("3.8") || calls.length < 2) return { ok: false, status: 503 };
+    return {
+      ok: true,
+      json: async () => ({ candidates: [{ content: { parts: [{ text: "Number one." }] } }] }),
+    };
+  };
+  const wav = wavFromPcm([Buffer.alloc(48000, 9)], 48000, 24000);
+  const text = await transcribeWav({
+    provider: "gemini",
+    apiKey: "K-busy-1",
+    wav,
+    fetcher,
+    pauses: [0, 0, 0],
+  });
+  assert.equal(text, "Number one.");
+  assert.deepEqual(
+    calls.map((c) => c.split(":")[0]),
+    ["gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.1-flash"],
+  );
+  const busy = async () => ({ ok: false, status: 503, json: async () => ({ models: [] }) });
+  await assert.rejects(
+    transcribeWav({ provider: "gemini", apiKey: "K-busy-2", wav, fetcher: busy, pauses: [0] }),
+    (e) => e.busy === true,
+  );
+  // verifiedNarration uses the Live transcript when the checker returns null.
+  const r = await verifiedNarration(
+    async () => ({ wav, transcript: "Number one." }),
+    { prompt: "Number one." },
+    {
+      transcribe: async () => null,
+    },
+  );
+  assert.equal(r.sttChecked, false);
+  assert.equal(r.transcript, "Number one.");
+});

@@ -113,6 +113,13 @@ export async function render(page, { go }) {
     maxLength: 160,
     placeholder: "자동",
   });
+  const sttMode = select(
+    [
+      ["auto", "별도 전사 모델 (바쁘면 Live 자막으로)"],
+      ["live", "Live 자막만 (빠름·호출 적음)"],
+    ],
+    settings.sttMode ?? "auto",
+  );
   const liveKey = h("input", { class: "input", type: "password", autocomplete: "off", spellcheck: false });
   const model = select(
     [[settings.liveModel || "", settings.liveModel || "모델 목록을 새로고침하세요"]],
@@ -182,10 +189,19 @@ export async function render(page, { go }) {
       ),
     ),
     h("div", { class: "grid-2" }, field("Live 오디오 모델", model), field("낭독 테스트 대본", script)),
-    field(
-      "전사 검증 모델 · 비우면 자동",
-      sttModel,
-      "저장된 음원을 이 모델로 다시 받아써서 대본과 비교합니다. Gemini는 최신 Flash, OpenAI는 gpt-transcribe가 기본입니다.",
+    h(
+      "div",
+      { class: "grid-2" },
+      field(
+        "전사 검증 방식",
+        sttMode,
+        "어느 방식이든 음원 길이가 대본에 맞는지는 항상 검사합니다(한 단어만 든 음원 차단).",
+      ),
+      field(
+        "전사 검증 모델 · 비우면 자동",
+        sttModel,
+        "별도 전사일 때 사용합니다. 응답이 503 등으로 바쁘면 잠시 뒤 다시, 다른 Flash 모델로 시도합니다.",
+      ),
     ),
     h(
       "div",
@@ -194,7 +210,12 @@ export async function render(page, { go }) {
         "선택 저장",
         async () => {
           if (!model.value) throw Error("모델을 선택하세요.");
-          await api("settings", { liveProvider, liveModel: model.value, sttModel: sttModel.value.trim() });
+          await api("settings", {
+            liveProvider,
+            liveModel: model.value,
+            sttModel: sttModel.value.trim(),
+            sttMode: sttMode.value,
+          });
           settings.liveModel = model.value;
           toast("Live 모델을 저장했습니다. 기존 음원은 유지됩니다.", "ok");
         },
