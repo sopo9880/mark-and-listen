@@ -12,8 +12,11 @@ foreach ($relative in @('mark-and-listen.exe', 'runtime/node.exe', 'app/src/main
     }
 }
 $unexpected = Get-ChildItem -LiteralPath $target -Recurse -File | Where-Object {
-    $_.Name -match '^(electron|codex|chrome|chromium)\.exe$' -or $_.Extension -in '.mp3','.wav','.ogg'
+    $_.Name -match '^(electron|codex|chrome|chromium)\.exe$' -or
+    ($_.Extension -in '.mp3','.wav','.ogg' -and $_.FullName -notmatch '[\\/]assets[\\/]directions[\\/][a-z0-9-]+\.wav$')
 }
+$directions = @(Get-ChildItem -LiteralPath (Join-Path $target 'app/assets/directions') -Filter *.wav -File)
+if ($directions.Count -ne 39) { throw "Expected 39 bundled direction clips, found $($directions.Count)" }
 if ($unexpected) { throw 'Unexpected bundled runtime or sample audio' }
 $runtime = Join-Path $target 'runtime/node.exe'
 & $runtime --check (Join-Path $target 'app/src/main.mjs')
