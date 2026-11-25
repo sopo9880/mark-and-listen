@@ -1,0 +1,58 @@
+name: CI
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.22.3'
+      - run: npm ci
+      - run: npx prettier --check "src/**/*.mjs" "public/**/*.mjs" "test/**/*.mjs" "scripts/**/*.mjs"
+      - run: npm test
+
+  windows:
+    # Unsigned build + installed-app smoke test. Releases are signed only by release-beta-win64.yml on main.
+    needs: test
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.22.3'
+      - name: Build and smoke-test the installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          npm ci
+          ./scripts/prepare-windows.ps1
+          rustup target add x86_64-pc-windows-msvc
+          npm run build:windows
+          $setup = @(Get-ChildItem 'src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis' -Filter '*.exe')
+          if ($setup.Count -ne 1) { throw 'Expected one setup EXE' }
+          $version = (Get-Content package.json | ConvertFrom-Json).displayVersion
+          ./scripts/smoke-windows.ps1 -Installer $setup[0].FullName -ExpectedVersion $version
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item $setup[0].FullName "dist/Mark-and-Listen-$version-ci-unsigned-Windows-x64-Setup.exe"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ci-windows-x64-unsigned
+          path: dist/
+          retention-days: 7

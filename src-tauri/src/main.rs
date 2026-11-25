@@ -26,7 +26,7 @@ fn main() {
         .setup(|app| {
             let resources = app.path().resource_dir()?;
             let runtime = resources.join("runtime/node.exe");
-            let entry = "app/src/start-beta.mjs";
+            let entry = "app/src/main.mjs";
             for file in [&runtime, &resources.join(entry)] {
                 if !file.is_file() {
                     return Err(io::Error::new(
@@ -50,20 +50,21 @@ fn main() {
             let app_handle = app.handle().clone();
             std::thread::spawn(move || {
                 for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-                    if line == "MARK_READY:4175" {
-                        let _ = tx.send(());
+                    if let Some(port) = line.strip_prefix("MARK_READY:").and_then(|p| p.parse::<u16>().ok()) {
+                        let _ = tx.send(port);
                     } else if line == "MARK_INSTALL_READY" {
                         app_handle.exit(0);
                     }
                 }
             });
-            rx.recv_timeout(Duration::from_secs(30))
+            let port = rx.recv_timeout(Duration::from_secs(30))
                 .map_err(|err| io::Error::other(format!("Installed backend did not signal readiness: {err}")))?;
 
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::External("http://127.0.0.1:4175".parse()?))
-                .title("Mark & Listen 0.1.1.0 Beta")
+            let origin = format!("http://127.0.0.1:{port}");
+            WebviewWindowBuilder::new(app, "main", WebviewUrl::External(origin.parse()?))
+                .title("Mark & Listen")
                 .inner_size(1320.0, 900.0).min_inner_size(850.0, 600.0)
-                .on_navigation(|url| url.scheme() == "http" && url.host_str() == Some("127.0.0.1") && url.port() == Some(4175))
+                .on_navigation(move |url| url.scheme() == "http" && url.host_str() == Some("127.0.0.1") && url.port() == Some(port))
                 .build()
                 .map_err(|err| io::Error::other(format!("Could not open the WebView2 window: {err}")))?;
             app.manage(backend);

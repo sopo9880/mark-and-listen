@@ -1,189 +1,638 @@
-import { createServer } from 'node:http';
-import { randomBytes } from 'node:crypto';
-import { homedir } from 'node:os';
-import { basename, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
-import { GENERATION_PROMPT, parseGenerated } from '../public/core.mjs';
-import { generateWithCodex } from './codex-engine.mjs';
-import { auditionWithGeminiLive } from './gemini-live.mjs';
-
-const PUBLIC=fileURLToPath(new URL('../public',import.meta.url));
-const BUILD='0.0.0.2';
-const STATIC=new Map([['/','index.html'],['/index.html','index.html'],['/styles.css','styles.css'],['/app.mjs','app.mjs'],['/bank.mjs','bank.mjs'],['/core.mjs','core.mjs'],['/audition.mjs','audition.mjs']]);
-const MIME={html:'text/html; charset=utf-8',css:'text/css; charset=utf-8',mjs:'text/javascript; charset=utf-8',mp3:'audio/mpeg',svg:'image/svg+xml'};
-for(const file of ['dashboard.mjs','full-exam.mjs','full-session.mjs','full-lc.mjs','full-lc-layout.mjs','full-lc-timings.mjs','full-lc-source.mjs','full-rc.mjs']) STATIC.set('/'+file,file);
-const headers={'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Frame-Options':'DENY','Content-Security-Policy':"default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",'Cache-Control':'no-store'};
-const fail=(status,message)=>Object.assign(Error(message),{status});
-const invalidAuditionWav=Symbol('invalidAuditionWav');
-const send=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(data));};
-async function json(req){
-  if((req.headers['content-type']??'').split(';')[0]!=='application/json') throw fail(415,'JSON 요청이 필요합니다.');
-  let len=0;const parts=[];
-  for await (const data of req){ len+=data.length;if(len>8000) throw fail(413,'요청이 너무 큽니다.');parts.push(data);}
-  try {const v=JSON.parse(Buffer.concat(parts).toString('utf8')); if(!v||typeof v!=='object'||Array.isArray(v))throw Error();return v;}
-  catch {throw fail(400,'JSON 요청 형식을 확인해 주세요.');}
-}
-function codexDirectory(){
-  const base=process.platform==='win32'?(process.env.LOCALAPPDATA || homedir()):join(homedir(),'.local','share');
-  return join(base,'mark-and-listen','codex');
-}
-export async function buildServer({generate,codex=generateWithCodex,updater,audition=auditionWithGeminiLive}={}){
-  if(!updater) {
-    try { const {createCodexUpdater}=await import('./codex-updater.mjs'); updater=createCodexUpdater({root:codexDirectory()}); }
-    catch(e) { if(e.code!=='ERR_MODULE_NOT_FOUND')throw e; }
+import { APP_VERSION, createAppUpdater } from "./app-update.mjs";
+import { UPDATE_PUBLIC_KEY } from "./update-trust.mjs";
+import { attachPhotos, checkedPhoto, createPhotoQuestion, decodePack, photoPath } from "./photo-pilot.mjs";
+import { verifiedNarration } from "./narration.mjs";
+import { createServer } from "node:http";
+import { randomBytes } from "node:crypto";
+import { readFile, writeFile, mkdir, stat, rename } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { join, extname } from "node:path";
+import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
+import { EpisodeStore, notebookEntries } from "./episode-store.mjs";
+import { isAudioGroup } from "../public/lib/exams.mjs";
+import { isOpen } from "../public/lib/attempt.mjs";
+import { groupPrompt, parseGroup, fixedGroup } from "./episode-content.mjs";
+import { createCodexUpdater } from "./codex-updater.mjs";
+import { generateWithCodex, codexLoginStatus, codexBrowserLogin } from "./codex-engine.mjs";
+import { generateWithProvider } from "./providers.mjs";
+import { listLiveModels, credentials } from "./live-models.mjs";
+import { auditionWithGeminiLive } from "./gemini-live.mjs";
+import { auditionWithOpenAILive } from "./openai-live.mjs";
+export const VERSION = APP_VERSION;
+const PUBLIC = fileURLToPath(new URL("../public/", import.meta.url));
+const dataRoot = () =>
+  process.env.MARK_LISTEN_DATA ||
+  join(
+    process.platform === "win32" ? process.env.LOCALAPPDATA || homedir() : join(homedir(), ".local", "share"),
+    "mark-and-listen",
+  );
+const fail = (status, message) => Object.assign(Error(message), { status });
+const json = async (req) => {
+  if (!req.headers["content-type"]?.startsWith("application/json")) throw fail(415, "JSON 필요");
+  let size = 0;
+  const parts = [];
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > 4_000_000) throw fail(413, "요청 크기 초과");
+    parts.push(chunk);
   }
-  if(!generate) generate=async args=>(await import('./providers.mjs')).generateWithProvider(args);
-  const token=randomBytes(32).toString('hex');
-  let generationBusy=false;
-  let auditionBusy=false;
-  let auditionRetryUntil=0;
-  const server=createServer(async(req,res)=>{
-    for(const [k,v] of Object.entries(headers))res.setHeader(k,v);
-    const port=server.address()?.port;
-    const host=req.headers.host;
-    if(![`127.0.0.1:${port}`,`localhost:${port}`].includes(host)
-       || (req.headers.origin && req.headers.origin!==`http://${host}`) || req.headers['sec-fetch-site']==='cross-site'){
-      send(res,403,{error:'이 로컬 앱에서는 다른 사이트의 요청을 받지 않아요.'});return;
-    }
+  try {
+    return JSON.parse(Buffer.concat(parts));
+  } catch {
+    throw fail(400, "JSON 오류");
+  }
+};
+export async function buildServer({
+  root = dataRoot(),
+  updater,
+  generate = generateWithProvider,
+  codex = generateWithCodex,
+  live,
+  models = listLiveModels,
+  autoUpdate = true,
+  smoke = false,
+} = {}) {
+  const appUpdate = createAppUpdater({ publicKey: UPDATE_PUBLIC_KEY });
+  let appUpdating = false;
+  const store = await new EpisodeStore(join(root, "episodes")).init();
+  updater ??= createCodexUpdater({ root: join(root, "codex") });
+  let settings = {
+    autoUpdate: true,
+    liveProvider: "gemini",
+    liveModel: "",
+    textProvider: "codex",
+    textModel: "",
+  };
+  try {
+    settings = { ...settings, ...JSON.parse(await readFile(join(root, "settings.json"), "utf8")) };
+  } catch (e) {
+    if (e.code !== "ENOENT") throw e;
+  }
+  const keys = {};
+  const connections = {};
+  let loginTask = null;
+  let uiReady = false,
+    busy = false,
+    updateBusy = false,
+    lastUpdate = 0,
+    updateError = "",
+    cooldown = 0;
+  const modelCache = new Map();
+  const notebookFile = join(root, "notebook.json");
+  const readNotebook = async () => {
     try {
-      const url=new URL(req.url,'http://'+host);
-      const path=url.pathname;
-      if(req.method==='GET'&&path==='/api/session'){send(res,200,{token,build:BUILD});return;}
-      if(req.method==='GET'&&path==='/api/codex/status'){
-        const s=updater ? await updater.status():{supported:false};
-        const exe=s.installed?await updater?.executable?.():null;
-        const quoted=exe ? (process.platform==='win32' ? "'"+exe.replaceAll("'","''")+"'" : "'"+exe.replaceAll("'","'\\''")+"'") : '';
-        const loginCommand=exe?(process.platform==='win32'?'& ':'')+quoted+' login':'codex login';
-        send(res,200,{...s,loginCommand}); return;
-      }
-      if(req.method==='POST'&&path.startsWith('/api/')){
-        if(req.headers['x-mark-session']!==token)throw fail(403,'페이지를 새로고침해 주세요.');
-        const body=await json(req);
-        if(path==='/api/audition'){
-          const prompt=typeof body.prompt==='string'?body.prompt.trim():'';
-          const apiKey=typeof body.apiKey==='string'?body.apiKey.trim():undefined;
-          const model=typeof body.model==='string'?body.model.trim():undefined;
-          if(!prompt||prompt.length>1200)throw fail(400,'듣기 대본을 1~1,200자로 입력해 주세요.');
-          if((body.apiKey!==undefined&&typeof body.apiKey!=='string')||apiKey&&(!/^[\x21-\x7E]{8,1024}$/.test(apiKey)))throw fail(400,'Gemini API 키를 확인해 주세요.');
-          if(!apiKey&&!process.env.GEMINI_API_KEY?.trim())throw fail(400,'Gemini API 키를 입력하거나 GEMINI_API_KEY를 설정해 주세요.');
-          if((body.model!==undefined&&typeof body.model!=='string')||model&&!/^gemini-[A-Za-z0-9.-]{1,100}$/.test(model))throw fail(400,'Gemini Live 모델 ID를 확인해 주세요.');
-          if(auditionBusy)throw fail(409,'한 번에 하나의 듣기 음원만 만들 수 있어요.');
-          const remaining=auditionRetryUntil-Date.now();
-          if(remaining>0){
-            res.setHeader('Retry-After',Math.ceil(remaining/1000));
-            throw fail(429,'Gemini Live 사용량 한도에 도달했어요. 잠시 뒤 다시 시도하거나 Google AI Studio에서 할당량을 확인해 주세요.');
-          }
-          auditionBusy=true;
-          const abort=new AbortController();
-          const abortOnClose=()=>abort.abort();
-          res.once('close',abortOnClose);
-          if(res.destroyed)abort.abort();
-          try {
-            const {wav}=await audition({apiKey:apiKey||undefined,model:model||undefined,prompt,signal:abort.signal});
-            if(abort.signal.aborted||res.destroyed)return;
-            if(!Buffer.isBuffer(wav)||wav.length<46||wav.length>4_500_000||
-               wav.toString('ascii',0,4)!=='RIFF'||wav.toString('ascii',8,16)!=='WAVEfmt '||
-               wav.readUInt32LE(4)!==wav.length-8||wav.toString('ascii',36,40)!=='data'||
-               wav.readUInt32LE(40)!==wav.length-44)throw invalidAuditionWav;
-            res.writeHead(200,{'Content-Type':'audio/wav','Content-Length':wav.length});
-            res.end(wav);
-          } catch(e) {
-            if(abort.signal.aborted||res.destroyed)return;
-            if(e?.code==='GEMINI_LIVE_RATE_LIMIT'){
-              auditionRetryUntil=Date.now()+15_000;
-              res.setHeader('Retry-After','15');
-              throw fail(429,'Gemini Live 사용량 한도에 도달했어요. 잠시 뒤 다시 시도하거나 Google AI Studio에서 할당량을 확인해 주세요.');
-            }
-            if(e?.code==='GEMINI_LIVE_ACCESS')throw fail(403,'Gemini API 키와 Live 모델 접근 권한을 확인해 주세요.');
-            if(e?.code==='GEMINI_LIVE_TIMEOUT')throw fail(504,'Gemini Live 응답이 늦어졌어요. 대본을 줄인 뒤 다시 시도해 주세요.');
-            if(e===invalidAuditionWav)throw fail(502,'Gemini Live가 재생 가능한 WAV를 반환하지 않았어요.');
-            // Never forward arbitrary provider responses, transport errors, or key fragments.
-            throw fail(502,'Gemini Live 낭독을 받아오지 못했어요. API 키, 네트워크, 모델 권한을 확인해 주세요. 다른 엔진으로 전환하지 않았어요.');
-          } finally {
-            res.removeListener('close',abortOnClose);
-            auditionBusy=false;
-          }
-          return;
-        }
-        if(path==='/api/generate'){
-          if(generationBusy)throw fail(409,'한 번에 한 세트만 만들 수 있어요.');
-          const {provider}=body;
-          if(!['codex','openai','gemini'].includes(provider))throw fail(400,'AI 엔진을 선택해 주세요.');
-          let apiKey,model;
-          if(provider!=='codex'){
-            apiKey=typeof body.apiKey==='string'?body.apiKey.trim():'';
-            if(apiKey.length<8||apiKey.length>1024||/[\r\n]/.test(apiKey))throw fail(400,'API 키를 입력해 주세요.');
-            model=typeof body.model==='string'?body.model.trim():'';
-            if(model&&!/^[a-z0-9][a-z0-9_.-]{0,79}$/i.test(model))throw fail(400,'모델 ID를 확인해 주세요.');
-          }
-          generationBusy=true;
-          const abort=new AbortController();
-          res.once('close',()=>abort.abort());
-          const signal=AbortSignal.any([abort.signal,AbortSignal.timeout(120000)]);
-          try {
-            const text=provider==='codex'
-              ? await codex({executable:await updater?.executable?.()??'codex',prompt:GENERATION_PROMPT,signal})
-              : await generate({provider,apiKey,model:model||undefined,prompt:GENERATION_PROMPT,signal});
-            send(res,200,{questions:parseGenerated(text),provider});
-          } finally {generationBusy=false;}
-          return;
-        }
-        if(['/api/codex/check','/api/codex/install','/api/codex/rollback'].includes(path)){
-          if(!updater)throw fail(501,'이 빌드에서는 자동 설치 도구가 연결되지 않았어요.');
-          if(path.endsWith('/check'))send(res,200,await updater.check());
-          else if(path.endsWith('/rollback'))send(res,200,await updater.rollback());
-          else {
-            if(generationBusy)throw fail(409,'문항 생성이 끝난 뒤 다시 시도해 주세요.');
-            if(!['pinned','latest'].includes(body.target))throw fail(400,'설치 버전 선택을 확인해 주세요.');
-            send(res,200,await updater.install(body.target));
-          }
-          return;
-        }
-      }
-      const file=STATIC.get(path)??(/^\/(?:audio\/(?:lc[1-6]|full-lc\/p[1-4]-[0-9]{2})\.mp3|full-lc-images\/[a-z0-9-]+\.svg)$/.test(path)?path.slice(1):null);
-      if(!file||!['GET','HEAD'].includes(req.method))throw fail(404,'파일을 찾을 수 없어요.');
-      const disk=join(PUBLIC,file);
-      const {size}=await stat(disk);
-      const type=MIME[basename(disk).split('.').at(-1)];
-      if(type==='audio/mpeg'){
-        res.setHeader('Accept-Ranges','bytes');
-        const raw=req.headers.range;
-        if(raw){
-          const match=/^bytes=(\d*)-(\d*)$/.exec(raw);
-          const first=match?.[1],last=match?.[2];
-          let start=first?Number(first):Math.max(0,size-Number(last)),end=first&&last?Math.min(size-1,Number(last)):size-1;
-          if(!match||(!first&&!last)||!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start<0||start>=size||end<start){
-            res.writeHead(416,{'Content-Range':'bytes */'+size});res.end();return;
-          }
-          res.writeHead(206,{'Content-Type':type,'Content-Length':end-start+1,'Content-Range':`bytes ${start}-${end}/${size}`});
-          if(req.method==='HEAD')res.end();else createReadStream(disk,{start,end}).on('error',()=>res.destroy()).pipe(res);
-          return;
-        }
-      }
-      res.writeHead(200,{'Content-Type':type,'Content-Length':size});
-      if(req.method==='HEAD')res.end();else createReadStream(disk).on('error',()=>res.destroy()).pipe(res);
-    }catch(e){
-      if(res.destroyed||res.writableEnded)return;
-      const secret=(e instanceof Error ? e.message : '').replace(/(sk[-_][a-zA-Z0-9_-]+|AIza[a-zA-Z0-9_-]+)/g,'[키 숨김]');
-      send(res,e.status??(e.code==='ENOENT'?404:502),secret?{error:secret.slice(0,400)}:{error:'요청을 완료하지 못했어요.'});
+      const data = JSON.parse(await readFile(notebookFile, "utf8"));
+      return data && typeof data.mastered === "object" ? data : { mastered: {} };
+    } catch {
+      return { mastered: {} };
     }
-  });
-  server.requestTimeout=130000;
-  return server;
-}
+  };
+  const token = randomBytes(32).toString("hex");
+  const persist = async () => {
+    await writeFile(join(root, "settings.tmp"), JSON.stringify(settings), { mode: 0o600 });
+    await rename(join(root, "settings.tmp"), join(root, "settings.json"));
+  };
+  const performUpdate = async () => {
+    if (busy || updateBusy || loginTask) return;
+    updateBusy = true;
+    try {
+      if ((await store.list()).some((e) => e.attempts.some((a) => isOpen(a)))) return;
+      lastUpdate = Date.now();
+      if ((await updater.status()).supported) await updater.install("latest");
+      updateError = "";
+    } catch {
+      updateError = "업데이트 실패 · 기존 엔진을 유지합니다.";
+    } finally {
+      updateBusy = false;
+    }
+  };
+  const speak =
+    live ??
+    ((args) => (args.provider === "gemini" ? auditionWithGeminiLive(args) : auditionWithOpenAILive(args)));
+  const getKey = (p) => keys[p] || process.env[p === "gemini" ? "GEMINI_API_KEY" : "OPENAI_API_KEY"];
+  async function connectionStates() {
+    const installed = await updater.executable();
+    return {
+      codex: installed ? (connections.codex ?? "unverified") : "unset",
+      gemini: getKey("gemini") ? (connections.gemini ?? "unverified") : "unset",
+      openai: getKey("openai") ? (connections.openai ?? "unverified") : "unset",
+      loginPending: !!loginTask,
+    };
+  }
+  async function checkedModels(provider) {
+    if (!["gemini", "openai"].includes(provider)) throw fail(400, "API 공급자를 선택하세요.");
+    if (!getKey(provider)) throw fail(400, "설정에서 API 키를 연결하세요.");
+    try {
+      const apiKey = getKey(provider);
+      const list = await models({ provider, apiKey });
+      if (getKey(provider) !== apiKey) throw Error("API 키가 변경되었습니다.");
+      modelCache.set(provider, list);
+      connections[provider] = "connected";
+      return list;
+    } catch {
+      connections[provider] = "error";
+      throw fail(502, "API 연결을 확인하지 못했습니다. 키, 권한과 네트워크를 확인하세요.");
+    }
+  }
 
-if(process.argv[1] && fileURLToPath(import.meta.url)===resolve(process.argv[1])){
-  const port=process.env.PORT===undefined?4173:Number(process.env.PORT);
-  const server=await buildServer();
-  server.on('error',e=>{console.error(e.code==='EADDRINUSE'?'포트 사용 중: set PORT=4174 후 다시 실행하세요.':e.message); process.exitCode=1;});
-  server.listen(port,'127.0.0.1',()=>{
-    const origin=`http://127.0.0.1:${server.address().port}`;
-    console.log(`Mark & Listen ${BUILD}: ${origin}`);
-    if(process.argv.includes('--open')&&process.platform==='win32'){
-      spawn('explorer.exe',[origin],{windowsHide:true,stdio:'ignore'}).on('error',()=>{});
+  async function liveArgs() {
+    const provider = settings.liveProvider,
+      apiKey = getKey(provider),
+      model = settings.liveModel;
+    credentials(provider, apiKey);
+    const cached = modelCache.get(provider);
+    if (!model || !cached?.some((m) => m.id === model))
+      throw fail(400, "설정에서 모델 목록을 갱신하고 Live 모델을 선택하세요.");
+    return { provider, apiKey, model };
+  }
+  const send = (res, data, status = 200) => {
+    res.writeHead(status, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(data));
+  };
+  async function stream(req, res, file, type) {
+    const { size } = await stat(file);
+    let start = 0,
+      end = size - 1;
+    const range = req.headers.range;
+    if (range) {
+      const m = /^bytes=(\d*)-(\d*)$/.exec(range);
+      if (!m || (!m[1] && !m[2])) throw fail(416, "범위 오류");
+      start = m[1] ? Number(m[1]) : Math.max(0, size - Number(m[2]));
+      end = m[1] && m[2] ? Math.min(size - 1, Number(m[2])) : size - 1;
+      if (!Number.isSafeInteger(start) || start < 0 || start >= size || end < start)
+        throw fail(416, "범위 오류");
+      res.setHeader("Content-Range", `bytes ${start}-${end}/${size}`);
+    }
+    res.writeHead(range ? 206 : 200, {
+      "Content-Type": type,
+      "Content-Length": end - start + 1,
+      "Accept-Ranges": "bytes",
+    });
+    if (req.method === "HEAD") res.end();
+    else
+      createReadStream(file, { start, end })
+        .on("error", () => res.destroy())
+        .pipe(res);
+  }
+  const server = createServer(async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+    );
+    try {
+      const port = server.address()?.port;
+      if (
+        req.headers.host !== `127.0.0.1:${port}` ||
+        (req.headers.origin && req.headers.origin !== `http://127.0.0.1:${port}`) ||
+        req.headers["sec-fetch-site"] === "cross-site"
+      )
+        throw fail(403, "다른 사이트의 요청은 허용하지 않습니다.");
+      const path = new URL(req.url, "http://localhost").pathname;
+      if (req.method === "GET" && path === "/api/session") {
+        send(res, { token, build: VERSION, ...(smoke ? { smoke: true } : {}) });
+        return;
+      }
+      if (smoke && req.method === "GET" && path === "/api/smoke") {
+        send(res, { uiReady });
+        return;
+      }
+      if (req.method === "GET" && path === "/api/notebook") {
+        const { mastered } = await readNotebook();
+        send(res, { entries: notebookEntries(await store.list(), mastered) });
+        return;
+      }
+      if (req.method === "GET" && path === "/api/library") {
+        send(res, { episodes: await store.list() });
+        return;
+      }
+      if (req.method === "GET" && path === "/api/app-update") {
+        send(res, {
+          enabled:
+            appUpdate.enabled && process.platform === "win32" && process.env.MARK_LISTEN_PARENT_PIPE === "1",
+          version: VERSION,
+        });
+        return;
+      }
+      if (req.method === "GET" && path === "/api/connections") {
+        send(res, await connectionStates());
+        return;
+      }
+      if (req.method === "GET" && path === "/api/settings") {
+        send(res, {
+          ...settings,
+          keys: { gemini: !!getKey("gemini"), openai: !!getKey("openai") },
+          codex: await updater.status(),
+          updateBusy,
+          updateError,
+          dataRoot: root,
+        });
+        return;
+      }
+      const photo = /^\/api\/photo\/([0-9a-f-]{36})\/(p1-[1-6])$/.exec(path);
+      if (photo && ["GET", "HEAD"].includes(req.method)) {
+        await stream(req, res, photoPath(store.root, photo[1], photo[2]), "image/jpeg");
+        return;
+      }
+      const media = /^\/api\/media\/([a-zA-Z0-9-]+)\/([a-zA-Z0-9-]+)$/.exec(path);
+      if (media && ["GET", "HEAD"].includes(req.method)) {
+        await stream(req, res, await store.audio(media[1], media[2]), "audio/wav");
+        return;
+      }
+      if (req.method === "POST" && path.startsWith("/api/")) {
+        if (req.headers["x-mark-session"] !== token) throw fail(403, "앱을 새로고침하세요.");
+        const b = await json(req);
+        if (smoke && path === "/api/smoke") {
+          uiReady = b.uiReady === true;
+          send(res, { uiReady });
+          return;
+        }
+        if (path === "/api/settings") {
+          if (busy || updateBusy) throw fail(409, "현재 작업이 끝난 후 설정을 바꾸세요.");
+          if (b.keyProvider) {
+            credentials(b.keyProvider, b.apiKey);
+            keys[b.keyProvider] = b.apiKey;
+            connections[b.keyProvider] = "unverified";
+            modelCache.delete(b.keyProvider);
+          }
+          for (const k of ["liveProvider", "textProvider"])
+            if (b[k] !== undefined) {
+              const allowed = k === "liveProvider" ? ["gemini", "openai"] : ["codex", "gemini", "openai"];
+              if (!allowed.includes(b[k])) throw fail(400, "공급자 오류");
+              settings[k] = b[k];
+            }
+          for (const k of ["liveModel", "textModel"])
+            if (b[k] !== undefined) {
+              if (typeof b[k] !== "string" || b[k].length > 160 || !/^[a-zA-Z0-9_.:-]*$/.test(b[k]))
+                throw fail(400, "모델 ID 오류");
+              settings[k] = b[k];
+            }
+          if (typeof b.autoUpdate === "boolean") settings.autoUpdate = b.autoUpdate;
+          await persist();
+          send(res, { ok: true });
+          return;
+        }
+
+        if (path === "/api/app-update/check") {
+          if (appUpdating) throw fail(409, "앱 업데이트가 진행 중입니다.");
+          try {
+            send(res, { update: await appUpdate.check() });
+          } catch (e) {
+            throw fail(502, e.message);
+          }
+          return;
+        }
+        if (path === "/api/app-update/install") {
+          if (busy || updateBusy || loginTask || appUpdating)
+            throw fail(409, "진행 중인 작업을 마친 뒤 설치하세요.");
+          if (process.platform !== "win32" || process.env.MARK_LISTEN_PARENT_PIPE !== "1")
+            throw fail(400, "Windows 데스크톱 앱에서 설치하세요.");
+          appUpdating = true;
+          busy = true;
+          try {
+            if ((await store.list()).some((e) => e.attempts.some((a) => isOpen(a))))
+              throw fail(409, "진행 중인 시험을 마친 뒤 설치하세요.");
+            await appUpdate.install(b.version);
+            res.once("finish", () => setTimeout(() => console.log("MARK_INSTALL_READY"), 300));
+            send(res, { installing: true });
+          } catch (e) {
+            appUpdating = false;
+            busy = false;
+            throw fail(e.status || 502, e.message);
+          }
+          return;
+        }
+        if (path === "/api/models") {
+          send(res, { models: await checkedModels(b.provider) });
+          return;
+        }
+        if (path === "/api/connection/check") {
+          if (b.provider === "codex") {
+            const exe = await updater.executable();
+            if (exe && !loginTask) {
+              try {
+                connections.codex = await codexLoginStatus(exe);
+              } catch {
+                connections.codex = "error";
+              }
+            }
+          } else await checkedModels(b.provider);
+          send(res, await connectionStates());
+          return;
+        }
+        if (path === "/api/codex/update") {
+          if (busy || updateBusy || loginTask) throw fail(409, "작업 중에는 교체하지 않습니다.");
+          await performUpdate();
+          send(res, { status: await updater.status(), error: updateError });
+          return;
+        }
+        if (path === "/api/codex/browser-login") {
+          if (busy || updateBusy || loginTask) throw fail(409, "진행 중인 작업이 있습니다.");
+          const exe = await updater.executable();
+          if (!exe) throw fail(400, "Codex 엔진을 먼저 설치하세요.");
+          connections.codex = "unverified";
+          const controller = new AbortController();
+          const abortLogin = () => controller.abort();
+          server.once("close", abortLogin);
+          loginTask = codexBrowserLogin(
+            exe,
+            AbortSignal.any([controller.signal, AbortSignal.timeout(300000)]),
+          )
+            .then(
+              (status) => {
+                connections.codex = status;
+              },
+              () => {
+                connections.codex = "error";
+              },
+            )
+            .finally(() => {
+              server.removeListener("close", abortLogin);
+              loginTask = null;
+            });
+          send(res, await connectionStates());
+          return;
+        }
+        if (path === "/api/photo-pilot") {
+          const { provider, model } = b;
+          if (
+            !["gemini", "openai"].includes(provider) ||
+            typeof model !== "string" ||
+            !/^[a-z0-9][a-z0-9_.-]{0,100}$/i.test(model)
+          )
+            throw fail(400, "이미지 입력을 지원하는 공급자와 모델 ID를 지정하세요.");
+          if (!getKey(provider)) throw fail(400, "설정에서 선택한 이미지 공급자의 API 키를 연결하세요.");
+          let photos;
+          try {
+            photos = decodePack(b.images);
+          } catch (e) {
+            throw fail(400, e.message);
+          }
+          const episode = await store.create({ counts: { 1: 6 }, title: "Part 1 · 사진 6장 파일럿" });
+          episode.photoPilot = { provider, model };
+          send(res, await attachPhotos(store, episode, photos));
+          return;
+        }
+        if (path === "/api/episodes") {
+          try {
+            send(res, await store.create(b));
+          } catch (e) {
+            throw fail(400, e.message);
+          }
+          return;
+        }
+        if (path === "/api/episodes/rename") {
+          send(res, await store.rename(b.id, b.title));
+          return;
+        }
+        if (path === "/api/episodes/delete") {
+          if (busy) throw fail(409, "제작 작업이 끝난 뒤 삭제하세요.");
+          const e = await store.read(b.id);
+          if (e.attempts.some((a) => isOpen(a)))
+            throw fail(409, "진행 중인 응시가 있는 회차는 삭제할 수 없습니다.");
+          await store.remove(b.id);
+          const notebook = await readNotebook();
+          for (const key of Object.keys(notebook.mastered))
+            if (key.startsWith(b.id + ":")) delete notebook.mastered[key];
+          await writeFile(notebookFile, JSON.stringify(notebook), { mode: 0o600 });
+          send(res, { ok: true });
+          return;
+        }
+        if (path === "/api/attempt/delete") {
+          try {
+            send(res, await store.removeAttempt(b.id, b.attemptId));
+          } catch (e) {
+            throw fail(409, e.message);
+          }
+          return;
+        }
+        if (path === "/api/notebook") {
+          if (typeof b.key !== "string" || !/^[a-zA-Z0-9-]{1,90}:[a-zA-Z0-9-]{1,90}$/.test(b.key))
+            throw fail(400, "오답 노트 항목 오류");
+          const notebook = await readNotebook();
+          if (b.mastered === true) notebook.mastered[b.key] = Date.now();
+          else delete notebook.mastered[b.key];
+          await writeFile(notebookFile + ".tmp", JSON.stringify(notebook), { mode: 0o600 });
+          await rename(notebookFile + ".tmp", notebookFile);
+          send(res, { ok: true });
+          return;
+        }
+        if (path === "/api/attempt/start") {
+          if (busy) throw fail(409, "제작 작업 종료 후 응시하세요.");
+          busy = true;
+          try {
+            send(res, await store.begin(b.id));
+          } catch (e) {
+            throw fail(409, e.code === "ENOENT" ? "저장된 음원이 없습니다." : e.message);
+          } finally {
+            busy = false;
+          }
+          return;
+        }
+        if (path === "/api/attempt/action") {
+          send(res, await store.attempt(b.id, b.attemptId, b.action));
+          return;
+        }
+        if (["/api/produce", "/api/review", "/api/test-live"].includes(path)) {
+          if (busy || updateBusy) throw fail(409, "다른 제작 또는 업데이트가 진행 중입니다.");
+          if (Date.now() < cooldown) throw fail(429, "사용량 한도 이후 잠시 기다려 주세요.");
+          busy = true;
+          const abort = new AbortController();
+          const close = () => abort.abort();
+          res.once("close", close);
+          try {
+            const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(120000)]);
+            if (path === "/api/test-live") {
+              const args = await liveArgs();
+              const r = await verifiedNarration(speak, {
+                ...args,
+                prompt:
+                  b.script === "choices"
+                    ? "A. The woman is arranging books.\nB. The window is closed.\nC. Three chairs are by the door.\nD. The table is not empty."
+                    : b.script === "single"
+                      ? "The meeting starts at ten fifteen."
+                      : "The meeting starts at ten fifteen. Please bring three copies.",
+                voice: args.provider === "gemini" ? "Kore" : "marin",
+                signal,
+              }).catch((e) => {
+                if (e.code === "NARRATION_MISMATCH")
+                  throw Object.assign(fail(422, e.message), { detail: e.last });
+                throw e;
+              });
+              send(res, { wav: r.wav.toString("base64"), transcript: r.transcript });
+              return;
+            }
+            const e = await store.read(b.id);
+            if (e.attempts.length) throw fail(409, "응시한 회차는 변경할 수 없습니다. 새 회차를 만드세요.");
+            if (path === "/api/review") {
+              const g = e.groups.find((g) => g.id === b.groupId);
+              if (!g || g.status !== "ready") throw fail(400, "문항 없음");
+              if (b.segmentId) {
+                const s = g.segments.find((s) => s.id === b.segmentId);
+                if (!s || s.status !== "ready") throw fail(400, "음원 없음");
+                s.reviewed = b.approved === true;
+              } else if (b.segments === "verified") {
+                for (const s of g.segments)
+                  if (s.status === "ready" && s.diff?.exact) s.reviewed = b.approved === true;
+              } else g.reviewed = b.approved === true;
+              await store.write(e);
+              send(res, e);
+              return;
+            }
+            let g = e.groups.find((g) => g.status !== "ready");
+            if (g) {
+              try {
+                const provider = settings.textProvider;
+                if (e.photoPilot) {
+                  const { provider, model } = e.photoPilot;
+                  if (!getKey(provider))
+                    throw fail(400, "설정에서 이미지 공급자의 API 키를 다시 연결하세요.");
+                  Object.assign(
+                    g,
+                    await createPhotoQuestion({
+                      store,
+                      episode: e,
+                      group: g,
+                      modelCall: ({ images, prompt }) =>
+                        generate({ provider, model, images, prompt, apiKey: getKey(provider), signal }),
+                    }),
+                  );
+                } else if (e.fixed || b.fixed === true) {
+                  Object.assign(g, fixedGroup(g));
+                } else {
+                  const prompt = groupPrompt(e, g);
+                  const raw =
+                    provider === "codex"
+                      ? await codex({ executable: (await updater.executable()) ?? "codex", prompt, signal })
+                      : await generate({
+                          provider,
+                          apiKey: getKey(provider),
+                          model: settings.textModel || undefined,
+                          prompt,
+                          signal,
+                        });
+                  Object.assign(g, parseGroup(raw, g, e));
+                }
+                await store.write(e);
+              } catch (err) {
+                g.status = "failed";
+                g.error =
+                  err.status === 400
+                    ? err.message
+                    : e.photoPilot
+                      ? "사진 문항 생성 또는 독립 검증 실패. 이미지 입력 모델·키·할당량과 사진의 명확성 및 중복 여부를 확인하세요."
+                      : "문항 생성 또는 검증 실패. 엔진·로그인·모델 설정을 확인하고 재시도하세요.";
+                await store.write(e);
+                throw fail(502, g.error);
+              }
+              send(res, { episode: e, more: true });
+              return;
+            }
+            let s;
+            for (const group of e.groups.filter((x) => isAudioGroup(e, x))) {
+              const candidate = group.segments.find((s) =>
+                b.retrySegment ? s.id === b.retrySegment : s.status !== "ready",
+              );
+              if (candidate) {
+                g = group;
+                s = candidate;
+                break;
+              }
+            }
+            if (!s) {
+              send(res, { episode: e, more: false });
+              return;
+            }
+            try {
+              const args = await liveArgs();
+              const voice =
+                args.provider === "gemini"
+                  ? s.speaker === "B"
+                    ? "Puck"
+                    : s.speaker === "C"
+                      ? "Charon"
+                      : "Kore"
+                  : s.speaker === "B"
+                    ? "cedar"
+                    : "marin";
+              const result = await verifiedNarration(speak, { ...args, prompt: s.text, voice, signal });
+              await store.saveAudio(e, s, result);
+              s.provider = args.provider;
+              s.model = args.model;
+              s.voice = voice;
+              s.diff = result.diff;
+              s.attempts = result.attempts;
+              delete s.lastTake;
+              await store.write(e);
+            } catch (err) {
+              if (s.status !== "ready") s.status = "failed";
+              if (err.last)
+                s.lastTake = {
+                  transcript: String(err.last.transcript ?? "").slice(0, 4000),
+                  diff: err.last.diff,
+                };
+              s.error =
+                err.code === "NARRATION_MISMATCH"
+                  ? err.message
+                  : "Live 생성 실패. 키·모델·할당량을 확인하세요. 다른 공급자로 전환하지 않았습니다.";
+              await store.write(e);
+              if (err.status === 429 || err.code === "GEMINI_LIVE_RATE_LIMIT") {
+                cooldown = Date.now() + 15000;
+                throw fail(429, s.error);
+              }
+              throw fail(502, s.error);
+            }
+            send(res, { episode: e, more: true });
+            return;
+          } finally {
+            busy = false;
+            res.removeListener("close", close);
+          }
+        }
+        throw fail(404, "API 없음");
+      }
+      if (!["GET", "HEAD"].includes(req.method)) throw fail(404, "파일 없음");
+      const name = path === "/" ? "index.html" : path.slice(1);
+      if (
+        !/^(?:(?:ui|lib)\/[a-z0-9-]+\.mjs|full-lc-images\/[a-z0-9-]+\.svg|[a-z0-9-]+\.(?:html|mjs|css|png))$/.test(
+          name,
+        )
+      )
+        throw fail(404, "파일 없음");
+      const type = {
+        ".html": "text/html; charset=utf-8",
+        ".mjs": "text/javascript",
+        ".css": "text/css",
+        ".png": "image/png",
+        ".svg": "image/svg+xml",
+      }[extname(name)];
+      await stream(req, res, join(PUBLIC, name), type);
+    } catch (e) {
+      if (!res.destroyed && !res.headersSent)
+        send(
+          res,
+          {
+            ...(e.detail ? { detail: e.detail } : {}),
+            error: e.status
+              ? e.message
+              : e.code === "ENOENT"
+                ? "저장된 파일을 찾을 수 없습니다."
+                : "작업을 완료하지 못했습니다. 설정과 저장 공간을 확인하세요.",
+          },
+          e.status || 500,
+        );
     }
   });
+  const interval = setInterval(() => {
+    if (autoUpdate && settings.autoUpdate && Date.now() - lastUpdate > 24 * 3600000) void performUpdate();
+  }, 60000);
+  interval.unref();
+  server.once("close", () => clearInterval(interval));
+  server.once("listening", () => {
+    if (autoUpdate && settings.autoUpdate) void performUpdate();
+  });
+  server.requestTimeout = 130000;
+  return { server, store };
 }
