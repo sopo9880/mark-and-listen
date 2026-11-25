@@ -14,3 +14,4 @@ src-tauri/target/
 *.jpeg
 
 !assets/part1-photos/*.jpg
+__pycache__/
