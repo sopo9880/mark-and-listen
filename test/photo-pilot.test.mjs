@@ -230,6 +230,7 @@ test("six-photo pilot imports, independently rejects bad questions, retries audi
   }
   const attempt = await request("attempt/start", { id });
   assert.equal(attempt.status, 200);
+  await request("attempt/action", { id, attemptId: attempt.data.id, action: { type: "begin" } });
   for (const g of e.groups)
     await request("attempt/action", {
       id,

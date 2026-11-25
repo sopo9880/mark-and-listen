@@ -14,6 +14,7 @@ import { TEST_MODE } from "./build-info.mjs";
 import { createSecretStore } from "./secrets.mjs";
 import { transcribeWav, plausibleDuration } from "./stt.mjs";
 import { codexModels } from "./codex-models.mjs";
+import { analysisPrompt, parseAnalysis } from "./analysis.mjs";
 import { DirectionBundle } from "./directions.mjs";
 import { createServer } from "node:http";
 import { createHash, randomBytes } from "node:crypto";
@@ -24,7 +25,7 @@ import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { EpisodeStore, notebookEntries, validateWav } from "./episode-store.mjs";
 import { isAudioGroup, audioTimeline, isFullListening } from "../public/lib/exams.mjs";
-import { isOpen } from "../public/lib/attempt.mjs";
+import { advanceAttempt, isOpen } from "../public/lib/attempt.mjs";
 import { groupPrompt, parseGroup, fixedGroup } from "./episode-content.mjs";
 import { createCodexUpdater } from "./codex-updater.mjs";
 import { generateWithCodex, codexLoginStatus, codexBrowserLogin } from "./codex-engine.mjs";
@@ -188,6 +189,8 @@ export async function buildServer({
     textModel: "",
     visionProvider: "codex",
     visionModel: "",
+    textEffort: "medium",
+    visionEffort: "medium",
     sttModel: "",
     sttMode: "auto", // auto: separate transcription, Live transcript if it stays busy · live: Live transcript only
   };
@@ -226,6 +229,7 @@ export async function buildServer({
   let uiReady = false,
     busy = false,
     updateBusy = false,
+    analysisBusy = false,
     lastUpdate = 0,
     updateError = "",
     cooldown = 0;
@@ -487,6 +491,11 @@ export async function buildServer({
                 throw fail(400, "모델 ID 오류");
               settings[k] = b[k];
             }
+          for (const k of ["textEffort", "visionEffort"])
+            if (b[k] !== undefined) {
+              if (!["low", "medium", "high", "xhigh"].includes(b[k])) throw fail(400, "추론 정도 오류");
+              settings[k] = b[k];
+            }
           if (b.sttMode !== undefined) {
             if (!["auto", "live"].includes(b.sttMode)) throw fail(400, "전사 검증 방식 오류");
             settings.sttMode = b.sttMode;
@@ -721,7 +730,7 @@ export async function buildServer({
               );
             }
             const e = await store.create(b);
-            if (isFullListening(e)) {
+            if (e.exam === "toeic" && e.groups.some((g) => isAudioGroup(e, g))) {
               const snapshot = await directions.snapshot();
               if (snapshot) {
                 e.directions = snapshot;
@@ -774,11 +783,58 @@ export async function buildServer({
           if (busy) throw fail(409, "제작 작업 종료 후 응시하세요.");
           busy = true;
           try {
+            // Episodes made before part directions were bundled get them before their first attempt.
+            const pre = await store.read(b.id);
+            if (
+              !pre.directions &&
+              !pre.attempts.length &&
+              pre.exam === "toeic" &&
+              pre.groups.some((g) => isAudioGroup(pre, g))
+            ) {
+              const snapshot = await directions.snapshot();
+              if (snapshot) {
+                pre.directions = snapshot;
+                await store.write(pre);
+              }
+            }
             send(res, await store.begin(b.id));
           } catch (e) {
             throw fail(409, e.code === "ENOENT" ? "저장된 음원이 없습니다." : e.message);
           } finally {
             busy = false;
+          }
+          return;
+        }
+        if (path === "/api/attempt/analysis") {
+          // Codex writes the weakness report for a finished attempt (once; again only when asked).
+          if (analysisBusy) throw fail(409, "다른 분석이 진행 중입니다.");
+          const e = await store.read(b.id);
+          const a = e.attempts.find((x) => x.id === b.attemptId);
+          if (!a || advanceAttempt(a).phase !== "done")
+            throw fail(409, "채점이 끝난 응시만 분석할 수 있습니다.");
+          if (a.analysis && b.refresh !== true) {
+            send(res, a.analysis);
+            return;
+          }
+          analysisBusy = true;
+          try {
+            log("info", `응시 분석 시작 ${e.id.slice(0, 8)} · ${settings.textModel || "Codex 기본 모델"}`);
+            const raw = await codex({
+              executable: (await updater.executable()) ?? "codex",
+              prompt: analysisPrompt(e, advanceAttempt(a)),
+              model: settings.textModel || undefined,
+              effort: settings.textEffort || "medium",
+              signal: AbortSignal.timeout(300000),
+            });
+            const analysis = { ...parseAnalysis(raw), at: Date.now(), model: settings.textModel || "codex" };
+            await store.saveAnalysis(e.id, a.id, analysis);
+            log("ok", "응시 분석 완료");
+            send(res, analysis);
+          } catch (err) {
+            log("error", `응시 분석 실패: ${errText(err)}`);
+            throw fail(err.status || 502, err.message || "분석에 실패했습니다.");
+          } finally {
+            analysisBusy = false;
           }
           return;
         }
@@ -839,6 +895,7 @@ export async function buildServer({
                     executable: (await updater.executable()) ?? "codex",
                     prompt,
                     model: settings.textModel || undefined,
+                    effort: settings.textEffort || "medium",
                     signal,
                   })
                 : generate({
@@ -871,7 +928,14 @@ export async function buildServer({
                       group: g,
                       modelCall: ({ images, prompt }) =>
                         vision.provider === "codex"
-                          ? codex({ executable, prompt, images, model: vision.model || undefined, signal })
+                          ? codex({
+                              executable,
+                              prompt,
+                              images,
+                              model: vision.model || undefined,
+                              effort: settings.visionEffort || "medium",
+                              signal,
+                            })
                           : generate({
                               provider: vision.provider,
                               model: vision.model || undefined,

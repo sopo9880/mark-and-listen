@@ -1,7 +1,7 @@
 import { h, icon, button, confirmDialog, toast, fmtClock, graphicTable } from "./dom.mjs";
 import { api, loadEpisode } from "./api.mjs";
-import { examOf, partLabel, audioTimeline, sectionOf } from "../lib/exams.mjs";
-import { advanceAttempt, remainingSections } from "../lib/attempt.mjs";
+import { examOf, partLabel, audioTimeline, sectionOf, PAPER_DIRECTIONS } from "../lib/exams.mjs";
+import { advanceAttempt, remainingSections, audioPosition } from "../lib/attempt.mjs";
 import { choiceMark } from "./model.mjs";
 
 export async function render(page, { params, go }) {
@@ -32,13 +32,32 @@ export async function render(page, { params, go }) {
   const status = h("div", { class: "audio-status" });
   const listen = button(
     "듣기 시작",
-    () => {
+    async () => {
+      // The exam clock starts here, not when the attempt was opened.
+      if (s.waiting) await act({ type: "begin" });
       armed = true;
       played = null;
       tick();
     },
     { kind: "accent", iconName: "headphones" },
   );
+  const skip = button(
+    "안내 건너뛰기",
+    () => {
+      const pos = audioPosition(s);
+      const seg = timeline.find((t) => pos >= t.start && pos < t.end);
+      if (!seg || seg.kind !== "direction") return;
+      const next = timeline.find((t) => t.start >= seg.end);
+      const target = (next ? next.start : seg.end) - 0.2;
+      if (target > pos) {
+        audio.pause();
+        played = null;
+        void act({ type: "skip", seconds: target - pos });
+      }
+    },
+    { iconName: "arrow", kind: "ghost" },
+  );
+  skip.hidden = true;
   const finish = button(
     "",
     async () => {
@@ -76,7 +95,7 @@ export async function render(page, { params, go }) {
         clock,
         h("span", { class: "clock-bar" }, clockBar),
       ),
-      h("div", { class: "row" }, listen, finish, leave),
+      h("div", { class: "row" }, skip, listen, finish, leave),
     ),
     status,
     h("div", { class: "exam-body" }, paper, omr),
@@ -99,7 +118,14 @@ export async function render(page, { params, go }) {
       icon(remainingSections(s).length <= 1 ? "flag" : "arrow", 17),
       h("span", { text: remainingSections(s).length <= 1 ? "제출" : "영역 종료" }),
     );
-    listen.hidden = !section.audio;
+    // Sections without audio start with the same button.
+    listen.hidden = !section.audio && !s.waiting;
+    listen.querySelector("span:last-child").textContent = s.waiting
+      ? section.audio
+        ? "듣기 시작"
+        : "시험 시작"
+      : "이어 듣기";
+    finish.disabled = !!s.waiting;
     if (paintedPhase !== s.phase) {
       paintedPhase = s.phase;
       drawPaper();
@@ -115,7 +141,13 @@ export async function render(page, { params, go }) {
       if (sectionOf(e, g) !== s.phase) continue;
       if (g.part !== lastPart) {
         lastPart = g.part;
-        paper.append(h("h2", { class: "part-title", text: partLabel(e, g.part) }));
+        // The test book is English only, like the real one.
+        if (e.exam === "toeic")
+          paper.append(
+            h("h2", { class: "part-title", text: `PART ${g.part}` }),
+            h("p", { class: "part-directions", text: PAPER_DIRECTIONS[g.part] }),
+          );
+        else paper.append(h("h2", { class: "part-title", text: partLabel(e, g.part) }));
       }
       const block = h("div", { class: "q-group", dataset: { group: g.id } });
       if (g.image || g.graphic)
@@ -138,13 +170,7 @@ export async function render(page, { params, go }) {
             { class: "q-text" },
             h("span", { class: "q-num", text: num }),
             listenOnly
-              ? h("span", {
-                  class: "muted",
-                  text:
-                    q.part === 1
-                      ? "사진을 가장 잘 묘사한 문장을 듣고 고르세요."
-                      : "질문과 응답을 듣고 가장 알맞은 응답을 고르세요.",
-                })
+              ? h("span", { class: "muted", text: "Mark your answer on your answer sheet." })
               : q.question,
           ),
         );
@@ -255,6 +281,22 @@ export async function render(page, { params, go }) {
   function tick() {
     if (stopped || s.phase === "done") return;
     const now = Date.now();
+    if (s.waiting) {
+      clock.textContent = fmtClock(s.durations[s.phase]);
+      clockBar.style.width = "100%";
+      status.hidden = false;
+      skip.hidden = true;
+      status.replaceChildren(
+        icon("headphones", 16),
+        h("span", {
+          text: exam.sections[s.phase]?.audio
+            ? "‘듣기 시작’을 누르면 시험 시간이 시작되고 파트 안내부터 재생됩니다."
+            : "‘시험 시작’을 누르면 시험 시간이 시작됩니다.",
+        }),
+      );
+      status.className = "audio-status";
+      return;
+    }
     const current = advanceAttempt(s, now);
     const left = Math.max(0, current.phaseEndsAt - now);
     clock.textContent = fmtClock(left);
@@ -268,19 +310,18 @@ export async function render(page, { params, go }) {
     if (!exam.sections[s.phase]?.audio) {
       stopAudio();
       status.hidden = true;
+      skip.hidden = true;
       return;
     }
     status.hidden = false;
-    const elapsed = (now - s.phaseStartedAt) / 1000;
+    const elapsed = audioPosition(s, now);
     const seg = timeline.find((t) => elapsed >= t.start && elapsed < t.end);
-    for (const el of paper.querySelectorAll(".q-group.playing"))
-      if (el.dataset.group !== seg?.groupId) el.classList.remove("playing");
+    skip.hidden = !armed || seg?.kind !== "direction";
+    listen.hidden = armed;
     if (!armed) {
       status.replaceChildren(
         icon("headphones", 16),
-        h("span", {
-          text: "‘듣기 시작’을 누르면 현재 시험 시간 위치부터 재생됩니다. 시험 시간은 이미 흐르고 있어요.",
-        }),
+        h("span", { text: "재생이 멈췄습니다. ‘이어 듣기’를 누르면 지금 시험 위치부터 이어서 재생됩니다." }),
       );
       status.className = "audio-status warn";
       return;
@@ -299,13 +340,12 @@ export async function render(page, { params, go }) {
       status.className = "audio-status";
       return;
     }
-    if (seg.groupId) paper.querySelector(`.q-group[data-group="${seg.groupId}"]`)?.classList.add("playing");
     if (played !== seg.id) {
       played = seg.id;
       audio.src = seg.audio;
       audio.onloadedmetadata = () => {
         audio.currentTime = Math.min(
-          Math.max(0, (Date.now() - s.phaseStartedAt) / 1000 - seg.start),
+          Math.max(0, audioPosition(s) - seg.start),
           Math.max(0, audio.duration - 0.05),
         );
       };

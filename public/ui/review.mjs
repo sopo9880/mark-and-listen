@@ -1,4 +1,4 @@
-import { h, icon, card, chip, progress, segmented, fmtDate, fmtClock, graphicTable } from "./dom.mjs";
+import { h, icon, card, chip, progress, segmented, fmtDate, fmtClock, graphicTable, button } from "./dom.mjs";
 import { api, loadEpisode } from "./api.mjs";
 import { examOf, partLabel, isAudioGroup } from "../lib/exams.mjs";
 import { advanceAttempt } from "../lib/attempt.mjs";
@@ -206,6 +206,7 @@ export async function render(page, { params }) {
   page.append(
     hero,
     breakdown,
+    analysisCard(id, attemptId, a.analysis),
     h(
       "div",
       { class: "groups-head" },
@@ -225,4 +226,83 @@ export async function render(page, { params }) {
   draw();
   // Keep the per-question summary cached on the server for list views (older attempts may lack it).
   api("attempt/action", { id, attemptId, action: { type: "sync" } }).catch(() => {});
+}
+
+/** Codex weakness report: shown when saved, requested automatically once after grading. */
+function analysisCard(id, attemptId, saved) {
+  const body = h("div", { class: "analysis-body" });
+  const head = h(
+    "div",
+    { class: "card-head" },
+    h("h2", {}, icon("sparkle", 18), " 약점 분석"),
+    h("small", { class: "muted", text: "Codex가 오답과 파트별 정답률을 보고 작성합니다" }),
+  );
+  const draw = (r) => {
+    body.replaceChildren(
+      h("p", { class: "analysis-summary", text: r.summary }),
+      r.strengths?.length
+        ? h("div", { class: "chips" }, ...r.strengths.map((t) => chip("강점 · " + t, "ok")))
+        : null,
+      h("h3", { text: "약점" }),
+      h(
+        "ol",
+        { class: "weak-list" },
+        ...r.weaknesses.map((w) =>
+          h(
+            "li",
+            {},
+            h("strong", { text: w.area }),
+            h("p", { class: "muted small", text: w.evidence }),
+            h("p", { text: "💡 " + w.tip }),
+          ),
+        ),
+      ),
+      h("h3", { text: "추천 학습" }),
+      h(
+        "ul",
+        { class: "plan-list" },
+        ...r.plan.map((p) =>
+          h(
+            "li",
+            {},
+            h("strong", { text: p.title }),
+            p.minutes ? chip(`${p.minutes}분`) : null,
+            h("p", { class: "muted small", text: p.detail }),
+          ),
+        ),
+      ),
+      h("p", { class: "next-focus" }, h("strong", { text: "다음 회차 집중: " }), r.nextFocus),
+      h(
+        "div",
+        { class: "row end" },
+        h("small", { class: "muted", text: `${fmtDate(r.at)} 분석` }),
+        button("다시 분석", () => run(true), { small: true, kind: "ghost", iconName: "refresh" }),
+      ),
+    );
+  };
+  const run = async (refresh = false) => {
+    body.replaceChildren(
+      h(
+        "p",
+        { class: "muted" },
+        h("span", { class: "pulse" }),
+        " Codex가 응시 결과를 분석하는 중입니다… (최대 몇 분)",
+      ),
+    );
+    try {
+      draw(await api("attempt/analysis", { id, attemptId, refresh }));
+    } catch (e) {
+      body.replaceChildren(
+        h("p", { class: "error-text", text: "분석하지 못했습니다: " + e.message }),
+        h(
+          "div",
+          { class: "row" },
+          button("다시 시도", () => run(refresh), { iconName: "refresh" }),
+        ),
+      );
+    }
+  };
+  if (saved) draw(saved);
+  else void run();
+  return card({ class: "analysis" }, head, body);
 }

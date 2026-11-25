@@ -220,7 +220,7 @@ export async function render(page, { params, go }) {
             h(
               "div",
               { class: "row-main" },
-              h("strong", { text: fmtDate(a.startedAt) }),
+              h("strong", { text: fmtDate(a.startedAt ?? a.createdAt) }),
               h("small", {
                 class: "muted",
                 text:

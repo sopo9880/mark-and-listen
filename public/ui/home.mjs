@@ -52,7 +52,7 @@ export async function render(page, { go }) {
       h("h1", { text: active ? "진행 중인 시험이 있어요" : greeting }),
       h("p", {
         text: active
-          ? `${active[0].title} · ${EXAMS[active[0].exam].sections[active[1].phase]?.label ?? active[1].phase} 영역 · 남은 시간 ${fmtClock(active[1].phaseEndsAt - Date.now())}`
+          ? `${active[0].title} · ${EXAMS[active[0].exam].sections[active[1].phase]?.label ?? active[1].phase} 영역 · ${active[1].waiting ? "시작 전" : `남은 시간 ${fmtClock(active[1].phaseEndsAt - Date.now())}`}`
           : "회차를 만들고, 실전처럼 풀고, 틀린 문제만 다시 봅니다. 완성된 회차는 인터넷 없이도 응시할 수 있어요.",
       }),
     ),
@@ -198,9 +198,51 @@ export async function render(page, { go }) {
     ),
   );
 
+  // Latest Codex study report, if any, as the dashboard's study advice.
+  const advised = results.filter((r) => r.a.analysis).at(-1);
+  const advice = advised
+    ? card(
+        { class: "advice" },
+        h(
+          "div",
+          { class: "card-head" },
+          h("h2", {}, icon("sparkle", 18), " 추천 학습"),
+          h("a", { class: "link", href: `#/review/${advised.e.id}/${advised.a.id}`, text: "분석 리포트" }),
+        ),
+        h(
+          "p",
+          { class: "next-focus" },
+          h("strong", { text: "지금 집중할 것: " }),
+          advised.a.analysis.nextFocus,
+        ),
+        h(
+          "ul",
+          { class: "plan-list" },
+          ...advised.a.analysis.plan
+            .slice(0, 3)
+            .map((p) =>
+              h(
+                "li",
+                {},
+                h("strong", { text: p.title }),
+                p.minutes ? chip(`${p.minutes}분`) : null,
+                h("p", { class: "muted small", text: p.detail }),
+              ),
+            ),
+        ),
+        h("small", {
+          class: "muted",
+          text: `${advised.e.title} · ${fmtDate(advised.a.submittedAt)} 응시 기준 · 약점: ${advised.a.analysis.weaknesses
+            .slice(0, 3)
+            .map((w) => w.area)
+            .join(", ")}`,
+        }),
+      )
+    : null;
   page.append(
     hero,
     stats,
+    advice,
     h(
       "div",
       { class: "grid-2" },

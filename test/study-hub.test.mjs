@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { transcriptDiff, verifiedNarration } from "../src/narration.mjs";
 import { EpisodeStore, notebookEntries } from "../src/episode-store.mjs";
-import { parseGroup, groupPrompt } from "../src/episode-content.mjs";
+import { blueprint } from "../public/lib/exams.mjs";
+import { parseGroup, groupPrompt, fixedGroup } from "../src/episode-content.mjs";
 import { buildServer } from "../src/server.mjs";
 import {
   cbtConfig,
@@ -136,6 +137,7 @@ test("CBT episode: generate, take without audio, grade with subject cut-off and 
   assert.deepEqual(phaseDurations(e), { CBT: 15 * 60000 });
   await store.write(e);
   const a = await store.begin(e.id);
+  await store.attempt(e.id, a.id, { type: "begin" });
   assert.equal(a.phase, "CBT");
   const qs = e.groups.flatMap((g) => g.questions);
   // Subject 1: all correct (100). Subject 2: one correct (20) → fails the 40-point cut-off.
@@ -245,6 +247,7 @@ test("server: rename, notebook mastery, delete and static UI modules", async (t)
   assert.equal(r.status, 200);
   assert.equal((await post("episodes/rename", { id: e.id, title: "  새 이름 " })).data.title, "새 이름");
   const a = (await post("attempt/start", { id: e.id })).data;
+  await post("attempt/action", { id: e.id, attemptId: a.id, action: { type: "begin" } });
   assert.equal((await post("episodes/delete", { id: e.id })).status, 409, "open attempt blocks deletion");
   await post("attempt/action", { id: e.id, attemptId: a.id, action: { type: "next" } });
   const notes = await (await fetch(base + "/api/notebook")).json();
@@ -306,4 +309,113 @@ test("test mode joins the listening section into one WAV with the exam's pauses"
   const expectedSamples = Math.round((0.1 + 0.6 + 0.1 + 5 + 0.1 + 0.6) * 24000) + 2400;
   assert.equal((wav.length - 44) / 2, expectedSamples);
   assert.equal(wav.readUInt32LE(24), 24000);
+});
+
+test("an attempt waits for the start button; skipping directions moves the audio, not the deadline", async () => {
+  const { startAttempt, beginAttempt, skipAudio, audioPosition, advanceAttempt, markAttempt } =
+    await import("../public/lib/attempt.mjs");
+  const e = {
+    id: "w",
+    exam: "toeic",
+    config: {},
+    groups: [{ ...fixedGroup(blueprint("toeic", { 2: 1 })[0]), reviewed: true }],
+  };
+  e.groups[0].segments = e.groups[0].segments.map((s) => ({
+    ...s,
+    status: "ready",
+    duration: 2,
+    audio: "/x",
+  }));
+  const waiting = startAttempt(e, 1000, { waiting: true });
+  assert.equal(waiting.waiting, true);
+  assert.equal(advanceAttempt(waiting, 10 ** 12).phase, "LC", "the clock does not run before start");
+  assert.equal(
+    markAttempt(waiting, e, e.groups[0].questions[0].id, 0, 5000).marks[e.groups[0].questions[0].id],
+    undefined,
+  );
+  const s = beginAttempt(waiting, 50_000);
+  assert.equal(s.phaseEndsAt, 50_000 + s.durations.LC);
+  const skipped = skipAudio(s, 12, 60_000);
+  assert.equal(skipped.phaseEndsAt, s.phaseEndsAt);
+  assert.equal(audioPosition(skipped, 60_000), 10 + 12);
+});
+
+test("Codex writes a weakness report for a finished attempt; it is saved and shown again without a new call", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "ml-analysis-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const updater = { status: async () => ({ supported: false }), executable: async () => null };
+  const prompts = [];
+  const report = {
+    summary: "Part 5 품사 문제에서 실수가 많았습니다.",
+    strengths: ["시제 문제"],
+    weaknesses: [
+      {
+        area: "품사 자리",
+        evidence: "1번에서 동사 원형을 골랐습니다.",
+        tip: "빈칸 앞뒤 품사를 먼저 확인하세요.",
+      },
+    ],
+    plan: [{ title: "품사 자리 20문항", detail: "be동사 뒤 분사 자리를 집중 연습", minutes: 20 }],
+    nextFocus: "빈칸 앞뒤 품사 확인",
+  };
+  const codex = async ({ prompt, effort }) => {
+    prompts.push({ prompt, effort });
+    if (prompt.includes("study report")) return "```json\n" + JSON.stringify(report) + "\n```";
+    if (prompt.includes("independently checking")) return JSON.stringify({ answers: [1] });
+    return JSON.stringify({
+      questions: [
+        {
+          question: "The report was _____ by Friday.",
+          choices: ["complete", "completed", "completing", "completes"],
+          answer: 1,
+          explanation: "수동태",
+        },
+      ],
+    });
+  };
+  const { server } = await buildServer({ root, updater, autoUpdate: false, codex });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  t.after(() => {
+    server.closeAllConnections();
+    server.close();
+  });
+  const base = "http://127.0.0.1:" + server.address().port;
+  const token = (await (await fetch(base + "/api/session")).json()).token;
+  const post = async (path, data) => {
+    const r = await fetch(base + "/api/" + path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Mark-Session": token },
+      body: JSON.stringify(data),
+    });
+    return { status: r.status, data: await r.json() };
+  };
+  const { data: e } = await post("episodes", { exam: "toeic", counts: { 5: 1 } });
+  let r;
+  do r = await post("produce", { id: e.id });
+  while (r.data.more);
+  const a = (await post("attempt/start", { id: e.id })).data;
+  assert.equal(
+    (await post("attempt/analysis", { id: e.id, attemptId: a.id })).status,
+    409,
+    "not before grading",
+  );
+  await post("attempt/action", { id: e.id, attemptId: a.id, action: { type: "begin" } });
+  const q = r.data.episode.groups[0].questions[0];
+  await post("attempt/action", {
+    id: e.id,
+    attemptId: a.id,
+    action: { type: "mark", questionId: q.id, index: 0 },
+  });
+  await post("attempt/action", { id: e.id, attemptId: a.id, action: { type: "next" } });
+  const first = await post("attempt/analysis", { id: e.id, attemptId: a.id });
+  assert.equal(first.status, 200);
+  assert.equal(first.data.nextFocus, report.nextFocus);
+  const asked = prompts.filter((p) => p.prompt.includes("study report"));
+  assert.equal(asked.length, 1);
+  assert.match(asked[0].prompt, /"picked":"A"/);
+  assert.equal(asked[0].effort, "medium");
+  await post("attempt/analysis", { id: e.id, attemptId: a.id });
+  assert.equal(prompts.filter((p) => p.prompt.includes("study report")).length, 1, "saved report is reused");
+  const lib = await (await fetch(base + "/api/library")).json();
+  assert.equal(lib.episodes[0].attempts[0].analysis.weaknesses[0].area, "품사 자리");
 });

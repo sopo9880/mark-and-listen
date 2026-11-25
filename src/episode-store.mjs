@@ -12,7 +12,14 @@ import {
   questionsOf,
   isAudioGroup,
 } from "../public/lib/exams.mjs";
-import { startAttempt, advanceAttempt, markAttempt, finishPhase } from "../public/lib/attempt.mjs";
+import {
+  startAttempt,
+  advanceAttempt,
+  markAttempt,
+  finishPhase,
+  beginAttempt,
+  skipAudio,
+} from "../public/lib/attempt.mjs";
 import { scoreAttempt } from "../public/lib/scoring.mjs";
 
 import { levelWav } from "./audio-level.mjs";
@@ -169,7 +176,7 @@ export class EpisodeStore {
       await this.verifyAudio(e);
       const unfinished = e.attempts.find((a) => advanceAttempt(a).phase !== "done");
       if (unfinished) return unfinished;
-      const s = startAttempt(e);
+      const s = startAttempt(e, Date.now(), { waiting: true });
       e.attempts.unshift(s);
       await this.write(e);
       return s;
@@ -184,11 +191,15 @@ export class EpisodeStore {
       s =
         action?.phase && action.phase !== s.phase
           ? advanceAttempt(s)
-          : action?.type === "mark"
-            ? markAttempt(s, e, action.questionId, action.index)
-            : action?.type === "next"
-              ? finishPhase(s)
-              : advanceAttempt(s);
+          : action?.type === "begin"
+            ? beginAttempt(s)
+            : action?.type === "skip"
+              ? skipAudio(s, Number(action.seconds))
+              : action?.type === "mark"
+                ? markAttempt(s, e, action.questionId, action.index)
+                : action?.type === "next"
+                  ? finishPhase(s)
+                  : advanceAttempt(s);
       if (s.phase === "done" && !s.summary?.bySection) {
         const { rows, ...summary } = scoreAttempt(e, s.marks);
         s.summary = summary;
@@ -196,6 +207,16 @@ export class EpisodeStore {
       e.attempts[i] = s;
       await this.write(e);
       return s;
+    });
+  }
+  async saveAnalysis(id, aid, analysis) {
+    return this.locked(async () => {
+      const e = await this.read(id);
+      const a = e.attempts.find((x) => x.id === aid);
+      if (!a) throw Error("응시 기록 없음");
+      a.analysis = analysis;
+      await this.write(e);
+      return a;
     });
   }
   async removeAttempt(id, aid) {

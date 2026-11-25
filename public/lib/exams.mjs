@@ -224,6 +224,17 @@ export function phaseDurations(e) {
 /** Pauses used both by the exam player and by the joined listening file (seconds). */
 export const GAPS = { turn: 0.35, cue: 0.6, part12: 5, part34: 8, directions: 1.5 };
 
+/** Test-book directions (English, as printed on the paper). Listening texts match the bundled direction clips. */
+export const PAPER_DIRECTIONS = {
+  1: "Directions: For each question in this part, you will see a photograph in your test book and hear four statements about it. Choose the one statement that best describes the photograph, and mark your answer on the answer sheet. The statements are not printed in your test book, and you will hear them only one time.",
+  2: "Directions: In this part, you will hear a question or a statement, followed by three responses. Choose the best response and mark your answer on the answer sheet. The question and the responses are not printed in your test book, and you will hear them only one time.",
+  3: "Directions: In this part, you will hear short conversations between two or more people. After each conversation, you will hear three questions about it. Choose the best answer to each question and mark it on the answer sheet. Some questions refer to a graphic in your test book. You will hear each conversation only one time.",
+  4: "Directions: In this part, you will hear short talks given by one speaker. After each talk, you will hear three questions about it. Choose the best answer to each question and mark it on the answer sheet. Some questions refer to a graphic in your test book. You will hear each talk only one time.",
+  5: "Directions: Each sentence below has a blank. Choose the word or phrase that best completes the sentence, and mark your answer on the answer sheet.",
+  6: "Directions: Read each text below. Some words, phrases, or sentences are missing. Choose the answer that best completes each blank, and mark it on the answer sheet.",
+  7: "Directions: In this part, you will read different kinds of texts, such as e-mails, notices, articles, and text messages. Answer the questions that follow each text or group of texts, and mark your answers on the answer sheet.",
+};
+
 /** Question numbers after which a full listening section says "turn to the next page" (real test book pages). */
 export const NEXT_PAGE_AFTER = new Set([2, 6, 43, 64, 82]);
 
@@ -265,6 +276,10 @@ export const isFullListening = (e) => {
  */
 export function audioTimeline(e) {
   const clips = e.directions?.clips ?? null;
+  // Part directions play in every TOEIC listening episode; the section intro/end, number cues and page turns only
+  // fit the full 100-question layout.
+  const full = isFullListening(e);
+  const fullOnly = (key) => /^(?:lc-intro|lc-end|num-\d+|next-page)$/.test(key);
   const list = [];
   let at = 0;
   const add = (entry, duration, gap) => {
@@ -272,6 +287,7 @@ export function audioTimeline(e) {
     at += duration + gap;
   };
   const cue = (key, gap, groupId = null) => {
+    if (!full && fullOnly(key)) return;
     const c = clips?.[key];
     if (c)
       add(

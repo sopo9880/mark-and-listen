@@ -46,6 +46,7 @@ export async function generateWithCodex({
   executable,
   prompt,
   model,
+  effort,
   images = [],
   signal,
   runCommand = run,
@@ -76,6 +77,12 @@ export async function generateWithCodex({
     if (model) {
       if (!/^[a-zA-Z0-9_.:-]{1,80}$/.test(model)) throw Error("Codex 모델 이름을 확인하세요.");
       args.push("--model", model);
+    }
+    // --ignore-user-config also ignores config.toml's reasoning effort, so the app passes it explicitly.
+    if (effort) {
+      if (!["minimal", "low", "medium", "high", "xhigh"].includes(effort))
+        throw Error("추론 정도를 확인하세요.");
+      args.push("-c", `model_reasoning_effort="${effort}"`);
     }
     // Photos are attached as files in the private scratch folder (codex exec --image).
     for (const [i, bytes] of images.entries()) {

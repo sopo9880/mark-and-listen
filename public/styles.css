@@ -1469,11 +1469,13 @@ body.focus-mode .sidebar {
   gap: 16px;
   padding: 6px 0;
   border-radius: 12px;
-  transition: background 0.3s;
 }
-.q-group.playing {
-  background: var(--mint-soft);
-  box-shadow: 0 0 0 10px var(--mint-soft);
+.part-directions {
+  margin: -4px 0 14px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink-2, inherit);
+  font-family: Georgia, "Times New Roman", serif;
 }
 .question {
   display: grid;
@@ -2058,4 +2060,41 @@ body.focus-mode .sidebar {
 }
 .dev-log-out .lv-info {
   color: #79c0ff;
+}
+
+.analysis-body {
+  display: grid;
+  gap: 10px;
+}
+.analysis-body h3 {
+  margin: 8px 0 0;
+  font-size: 14px;
+}
+.analysis-summary {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.weak-list,
+.plan-list {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 10px;
+}
+.weak-list p,
+.plan-list p {
+  margin: 4px 0 0;
+}
+.plan-list li > .chip {
+  margin-left: 8px;
+}
+.next-focus {
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--mint-soft, var(--surface-2));
+}
+.advice {
+  margin-bottom: 18px;
 }

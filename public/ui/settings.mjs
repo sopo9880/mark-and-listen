@@ -14,6 +14,7 @@ export async function render(page, { go }) {
     title: "문항 생성 엔진",
     desc: "모든 시험관의 AI 출제와 내부 정답 검증은 Codex가 합니다.",
     modelKey: "textModel",
+    effortKey: "textEffort",
     saved: "문항 생성 설정을 저장했습니다.",
   });
   const vision = engineCard(settings, {
@@ -21,6 +22,7 @@ export async function render(page, { go }) {
     title: "사진 문항 엔진",
     desc: "앱에 내장된 Part 1 사진을 Codex가 직접 보고 문항을 만든 뒤, 별도 호출로 정답 유일성·모호함·장면 중복을 검사합니다.",
     modelKey: "visionModel",
+    effortKey: "visionEffort",
     saved: "사진 문항 엔진을 저장했습니다.",
   });
 
@@ -454,10 +456,18 @@ function head(ic, title, sub) {
 }
 
 /** Codex engine card shared by question generation and photo questions: model dropdown or free entry. */
-function engineCard(settings, { iconName, title, desc, modelKey, saved }) {
+function engineCard(settings, { iconName, title, desc, modelKey, effortKey, saved }) {
   let current = settings[modelKey] ?? "";
-  let models = [],
-    defaultModel = null;
+  const effort = select(
+    [
+      ["low", "low · 빠름"],
+      ["medium", "medium · 기본"],
+      ["high", "high · 꼼꼼함"],
+      ["xhigh", "xhigh · 가장 깊게 (느림)"],
+    ],
+    settings[effortKey] ?? "medium",
+  );
+  let models = [];
   const manual = h("input", {
     class: "input",
     type: "text",
@@ -472,7 +482,7 @@ function engineCard(settings, { iconName, title, desc, modelKey, saved }) {
     const known = models.some((m) => m.id === current);
     list = select(
       [
-        ["", defaultModel ? `Codex 기본 모델 (${defaultModel})` : "Codex 기본 모델"],
+        ["", "Codex 기본 모델"],
         ...models.map((m) => [m.id, m.label === m.id ? m.id : `${m.label} · ${m.id}`]),
         ["__manual", "직접 입력…"],
       ],
@@ -488,6 +498,7 @@ function engineCard(settings, { iconName, title, desc, modelKey, saved }) {
         button("목록 새로고침", load, { iconName: "refresh" }),
       ),
       manualField,
+      field("추론 정도", effort, "Codex에 직접 전달합니다. 높을수록 문항 품질 검토가 꼼꼼하지만 느려집니다."),
       h("p", {
         class: "muted small",
         text: models.length
@@ -498,7 +509,7 @@ function engineCard(settings, { iconName, title, desc, modelKey, saved }) {
   };
   async function load() {
     try {
-      ({ models, defaultModel } = await api("codex-models", {}));
+      ({ models } = await api("codex-models", {}));
     } catch {
       models = [];
     }
@@ -516,7 +527,8 @@ function engineCard(settings, { iconName, title, desc, modelKey, saved }) {
         "저장",
         async () => {
           const model = list.value === "__manual" ? manual.value.trim() : list.value;
-          await api("settings", { [modelKey]: model });
+          await api("settings", { [modelKey]: model, [effortKey]: effort.value });
+          settings[effortKey] = effort.value;
           settings[modelKey] = current = model;
           draw();
           toast(saved, "ok");

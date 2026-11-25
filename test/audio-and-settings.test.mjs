@@ -209,6 +209,13 @@ test("codex passes the chosen model", async () => {
     generateWithCodex({ executable: "codex", prompt: "p", model: "bad model;rm", runCommand }),
     /모델/,
   );
+  calls.length = 0;
+  await generateWithCodex({ executable: "codex", prompt: "p", effort: "high", runCommand });
+  assert.ok(calls[1].join(" ").includes('-c model_reasoning_effort="high"'));
+  await assert.rejects(
+    generateWithCodex({ executable: "codex", prompt: "p", effort: "max!", runCommand }),
+    /추론/,
+  );
 });
 
 test("server: saved keys, automatic connection checks, model lists, directions and merged-audio checks", async (t) => {

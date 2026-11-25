@@ -52,6 +52,7 @@ test("Part 2 five questions: persisted audio, review gate, restart, offline OMR 
   const reopened = new EpisodeStore(store.root);
   assert.equal(audioReady(await reopened.read(e.id)), true);
   const attempt = await reopened.begin(e.id);
+  await reopened.attempt(e.id, attempt.id, { type: "begin" });
   for (const q of e.groups.flatMap((g) => g.questions))
     await reopened.attempt(e.id, attempt.id, { type: "mark", questionId: q.id, index: q.answer });
   const done = await reopened.attempt(e.id, attempt.id, { type: "next" });
@@ -93,6 +94,7 @@ test("Part 3 preserves alternating speakers and question prompts; full LC includ
   await store.write(e);
   assert.equal(audioReady(await store.read(e.id)), true);
   const a = await store.begin(e.id);
+  await store.attempt(e.id, a.id, { type: "begin" });
   assert.equal(a.durations.LC, 2700000);
 });
 test("wall clock boundaries lock late marks, preserve zero, transition once and grade after restart", () => {
@@ -278,6 +280,7 @@ test("server preserves success after quota, retries only failed segment, never m
   offline = true;
   const a = await p2("attempt/start", { id: e.id });
   assert.ok(a.id);
+  await p2("attempt/action", { id: e.id, attemptId: a.id, action: { type: "begin" } });
   const q = saved.groups[0].questions[0];
   await p2("attempt/action", {
     id: e.id,
@@ -323,6 +326,7 @@ test("a full 200-question fixture can finish both sections and archive an offlin
   await store.write(episode);
   const reopened = new EpisodeStore(store.root);
   const attempt = await reopened.begin(episode.id);
+  await reopened.attempt(episode.id, attempt.id, { type: "begin" });
   assert.equal(attempt.durations.LC, 45 * 60_000);
   assert.equal(attempt.durations.RC, 75 * 60_000);
   for (const group of episode.groups.filter((g) => g.part <= 4)) {
