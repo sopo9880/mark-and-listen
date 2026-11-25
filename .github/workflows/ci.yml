@@ -2,6 +2,11 @@ name: CI
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      prerelease:
+        description: Publish this build as a test prerelease (vX.Y.Z.W-rc.N, ignored by the in-app updater)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -56,3 +61,39 @@ jobs:
           name: ci-windows-x64-unsigned
           path: dist/
           retention-days: 7
+
+  prerelease:
+    # Test builds for manual download. The tag has an -rc suffix, so installed apps never offer it as an update.
+    needs: windows
+    if: github.event_name == 'workflow_dispatch' && inputs.prerelease
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ci-windows-x64-unsigned
+          path: dist
+      - name: Publish test prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').displayVersion")"
+          tag="v${version}-rc.${GITHUB_RUN_NUMBER}"
+          (cd dist && sha256sum *.exe > SHA256SUMS.txt)
+          {
+            echo "테스트 프리릴리스 · ${GITHUB_REF_NAME} @ ${GITHUB_SHA::7}"
+            echo
+            echo "- 서명되지 않은 CI 빌드입니다(Windows SmartScreen 경고가 뜰 수 있음). 앱 내 업데이트는 꺼져 있습니다."
+            echo "- 이 태그는 설치된 앱의 자동 업데이트 대상이 아닙니다."
+            echo
+            cat BETA-${version}.md
+          } > notes.md
+          gh release create "$tag" dist/*.exe dist/SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title "Mark & Listen ${version} 테스트 (rc.${GITHUB_RUN_NUMBER})" --notes-file notes.md
