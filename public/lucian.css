@@ -1135,9 +1135,11 @@
   max-width: none;
   padding: 0;
 }
-/* #447: sits at the bottom of the sidebar; the root only reserves the switch's own size. */
+/* #447: half size inside the settings "화면 테마" row (zoom keeps the switch's proportions and motion). */
 .u447.u447-slot {
-  width: 176px;
-  height: 74px;
-  margin: 4px auto 0;
+  width: 88px;
+  height: 37px;
+}
+.u447-slot .u447-b {
+  zoom: 0.5;
 }

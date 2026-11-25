@@ -9,7 +9,6 @@ import * as review from "./ui/review.mjs";
 import * as notebook from "./ui/notebook.mjs";
 import * as settings from "./ui/settings.mjs";
 import * as photos from "./ui/photos.mjs";
-import { themeSwitch } from "./ui/lux-theme.mjs";
 
 const NAV = [
   ["home", "홈", "home"],
@@ -153,7 +152,6 @@ window.addEventListener("hashchange", route);
 window.addEventListener("unhandledrejection", (e) => toast(e.reason?.message ?? String(e.reason), "error"));
 
 renderNav();
-document.getElementById("theme").append(themeSwitch());
 try {
   const session = await connect();
   document.getElementById("build").textContent = "v" + session.build + " · Beta";

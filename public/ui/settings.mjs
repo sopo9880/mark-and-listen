@@ -1,6 +1,7 @@
 import { h, icon, card, button, field, select, segmented, toast, confirmDialog } from "./dom.mjs";
 import { api, loadConnections, state } from "./api.mjs";
 import { diffView } from "./studio.mjs";
+import { themeSwitch } from "./lux-theme.mjs";
 
 export async function render(page, { go }) {
   const settings = await api("settings");
@@ -394,6 +395,25 @@ export async function render(page, { go }) {
     ),
   );
 
+  const appearance = card(
+    {},
+    head("eye", "화면 테마", ""),
+    h(
+      "div",
+      { class: "theme-row" },
+      h(
+        "div",
+        {},
+        h("strong", { text: "다크 모드" }),
+        h("small", {
+          class: "muted",
+          text: "처음에는 시스템 설정을 따르고, 바꾸면 다음 실행에도 유지됩니다.",
+        }),
+      ),
+      themeSwitch(),
+    ),
+  );
+
   const about = card(
     {},
     head("book", "데이터와 개인정보", ""),
@@ -416,7 +436,7 @@ export async function render(page, { go }) {
       "div",
       { class: "settings-grid" },
       h("div", { class: "stack" }, generation, vision, codex, checks),
-      h("div", { class: "stack" }, live, update, about),
+      h("div", { class: "stack" }, appearance, live, update, about),
     ),
   );
   syncText();

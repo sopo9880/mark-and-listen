@@ -25,13 +25,13 @@
 
 ## 디자인
 
-화면은 [Lucian UX/UI Prompt](https://lucianlabs.dev/uxui-prompt/)(MIT)의 테마 토큰과 요소를 바탕으로 합니다. `public/lucian.css`에 토큰·베이스와 요소 CSS를 원본 그대로 두고, 강조색만 로고의 그린·라임으로 매핑했습니다. 다크 모드는 시스템 설정을 따르며 사이드바 스위치로 바꿀 수 있습니다.
+화면은 [Lucian UX/UI Prompt](https://lucianlabs.dev/uxui-prompt/)(MIT)의 테마 토큰과 요소를 바탕으로 합니다. `public/lucian.css`에 토큰·베이스와 요소 CSS를 원본 그대로 두고, 강조색만 로고의 그린·라임으로 매핑했습니다. 다크 모드는 시스템 설정을 따르며 설정 → 화면 테마에서 바꿀 수 있습니다.
 
 | 요소 | 쓰인 곳 |
 |---|---|
 | [#039 미끄러지는 알약 탭](https://lucianlabs.dev/uxui-prompt/#039) | 모든 필터·세그먼트 컨트롤 (`ui/lux-tabs.mjs`) |
 | [#070 겹쳐 쌓이는 토스트](https://lucianlabs.dev/uxui-prompt/#070) | 앱 알림 (`ui/lux-toast.mjs`) |
-| [#447 낮·밤 하늘 스위치](https://lucianlabs.dev/uxui-prompt/#447) | 사이드바 라이트/다크 전환 (`ui/lux-theme.mjs`) |
+| [#447 낮·밤 하늘 스위치](https://lucianlabs.dev/uxui-prompt/#447) | 설정 → 화면 테마의 라이트/다크 전환, 절반 크기 (`ui/lux-theme.mjs`) |
 | [#095 모양이 바뀌는 막대 차트](https://lucianlabs.dev/uxui-prompt/#095) | 홈 ‘최근 성적’ (`ui/lux-bars.mjs`) |
 | [#151 기여가 쌓이는 주간 격자](https://lucianlabs.dev/uxui-prompt/#151) | 홈 ‘학습 기록’ 히트맵 (`ui/lux-heat.mjs`) |
 

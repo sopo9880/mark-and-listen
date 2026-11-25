@@ -1762,7 +1762,6 @@ body.focus-mode .sidebar {
   .brand span,
   #nav a span,
   .connections,
-  .theme-slot,
   .job {
     display: none;
   }
@@ -1945,4 +1944,14 @@ body.focus-mode .sidebar {
 .exam-bar .btn-primary {
   background: var(--mint);
   color: var(--forest-950);
+}
+.theme-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.theme-row > div {
+  display: grid;
+  gap: 2px;
 }
