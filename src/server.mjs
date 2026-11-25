@@ -12,10 +12,11 @@ import { verifiedNarration, transcriptDiff } from "./narration.mjs";
 import { solvePrompt, checkAnswers } from "./verify.mjs";
 import { TEST_MODE } from "./build-info.mjs";
 import { createSecretStore } from "./secrets.mjs";
-import { transcribeWav } from "./stt.mjs";
+import { transcribeWav, plausibleDuration } from "./stt.mjs";
+import { codexModels } from "./codex-models.mjs";
 import { DirectionBundle } from "./directions.mjs";
 import { createServer } from "node:http";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { readFile, writeFile, mkdir, stat, rename } from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import { join, extname } from "node:path";
@@ -195,6 +196,10 @@ export async function buildServer({
   } catch (e) {
     if (e.code !== "ENOENT") throw e;
   }
+  // Questions and photo items are written by Codex only; Gemini is used only for Live narration.
+  if (settings.textProvider !== "codex") Object.assign(settings, { textProvider: "codex", textModel: "" });
+  if (settings.visionProvider !== "codex")
+    Object.assign(settings, { visionProvider: "codex", visionModel: "" });
   const secretStore = createSecretStore(join(root, "keys.json"), secretCodec);
   const keys = await secretStore.load();
   let keySaveError = false;
@@ -209,21 +214,12 @@ export async function buildServer({
       signal,
       onRetry: (m) => log("info", m),
     });
+  // Gemini is used only through Live: a take is checked with the Live session's own transcript plus the
+  // length check (which rejects a clip holding a single word). OpenAI takes can still be re-transcribed.
   const narrationChecks = (provider, signal) => {
     if (!audioChecks) return {};
-    if (settings.sttMode === "live") return { duration: true };
-    return {
-      duration: true,
-      transcribe: async (wav) => {
-        try {
-          return await sttCall(provider, wav, signal);
-        } catch (err) {
-          if (!err.busy) throw err;
-          log("info", `전사 모델이 계속 바빠서 Live 자막과 길이 검사로 확인합니다 (${err.message})`);
-          return null;
-        }
-      },
-    };
+    if (provider === "gemini" || settings.sttMode === "live") return { duration: true };
+    return { duration: true, transcribe: (wav) => sttCall(provider, wav, signal) };
   };
   const connections = {};
   let loginTask = null;
@@ -481,7 +477,7 @@ export async function buildServer({
           }
           for (const k of ["liveProvider", "textProvider", "visionProvider"])
             if (b[k] !== undefined) {
-              const allowed = k === "liveProvider" ? ["gemini", "openai"] : ["codex", "gemini", "openai"];
+              const allowed = k === "liveProvider" ? ["gemini", "openai"] : ["codex"];
               if (!allowed.includes(b[k])) throw fail(400, "공급자 오류");
               settings[k] = b[k];
             }
@@ -528,6 +524,10 @@ export async function buildServer({
             busy = false;
             throw fail(e.status || 502, e.message);
           }
+          return;
+        }
+        if (path === "/api/codex-models") {
+          send(res, await codexModels());
           return;
         }
         if (path === "/api/text-models") {
@@ -622,31 +622,52 @@ export async function buildServer({
             send(res, { total: chunks.length, done: true, check: e.listeningCheck ?? null });
             return;
           }
-          const provider = settings.liveProvider;
-          if (!getKey(provider)) throw fail(400, "설정에서 Live 공급자의 API 키를 연결하세요.");
           busy = true;
           try {
             const c = chunks[index];
             const wav = await joinTimeline(store, e, c.entries, directions);
-            const transcript = await sttCall(provider, wav, AbortSignal.timeout(180000));
-            const diff = transcriptDiff(c.entries.map((x) => x.text).join("\n"), transcript);
+            // No transcription service: Gemini is used only through Live. The joined audio is checked against
+            // what each saved segment is (file integrity, length that fits the script, the take's own transcript)
+            // and against the exam timeline (order and pauses).
+            const problems = [];
+            let prevEnd = null;
+            for (const x of c.entries) {
+              if (prevEnd !== null && x.start < prevEnd - 1e-6) problems.push(`순서 오류: ${x.id ?? x.key}`);
+              prevEnd = x.end;
+              if (x.kind === "direction") continue;
+              const seg = e.groups.flatMap((g) => g.segments ?? []).find((y) => y.id === x.id);
+              try {
+                const bytes = await readFile(await store.audio(e.id, x.id));
+                if (createHash("sha256").update(bytes).digest("hex") !== seg?.sha256)
+                  problems.push(`파일 손상: ${x.id}`);
+              } catch {
+                problems.push(`음원 없음: ${x.id}`);
+              }
+              const fit = plausibleDuration(x.text, x.duration ?? 0);
+              if (!fit.ok) problems.push(`${x.id}: ${fit.reason}`);
+            }
+            const said = c.entries
+              .map((x) => (x.kind === "direction" ? x.text : (x.transcript ?? "")))
+              .join("\n");
+            const diff = transcriptDiff(c.entries.map((x) => x.text).join("\n"), said);
             const g = e.groups.find((x) => x.id === c.key);
             const result = {
               key: c.key,
               label: g ? `${g.id} · Part ${g.part}` : "안내 방송",
               seconds: Math.round(((wav.length - 44) / 2 / wav.readUInt32LE(24)) * 10) / 10,
-              exact: diff.exact,
+              exact: diff.exact && !problems.length,
               missing: diff.missing,
               added: diff.added,
               ops: diff.ops,
-              transcript: transcript.slice(0, 6000),
+              problems,
+              transcript: said.slice(0, 6000),
             };
             if (index === 0 || !e.listeningCheck) e.listeningCheck = { at: Date.now(), results: [] };
             e.listeningCheck.results = e.listeningCheck.results.filter((r) => r.key !== c.key).concat(result);
             await store.write(e);
             send(res, { total: chunks.length, index, result });
           } catch (err) {
-            throw fail(err.status === 429 ? 429 : 502, err.message || "전사 검사 실패");
+            throw fail(err.status === 429 ? 429 : 502, err.message || "합친 음원 검사 실패");
           } finally {
             busy = false;
           }

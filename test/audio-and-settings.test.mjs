@@ -246,7 +246,9 @@ test("server: saved keys, automatic connection checks, model lists, directions a
       wav: wavOf(Math.max(1, prompt.split(/\s+/).length / 2.5)),
       transcript: prompt,
     }),
-    stt: async () => "wrong words only",
+    stt: async () => {
+      throw Error("Gemini must not call a transcription model");
+    },
   };
   let { server, store } = await buildServer(opts);
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
@@ -290,25 +292,29 @@ test("server: saved keys, automatic connection checks, model lists, directions a
   assert.equal((await fetch(base + "/api/directions/lc-intro.wav")).status, 200);
   assert.equal((await fetch(base + "/api/directions/num-1.wav")).status, 500);
 
-  // Merged audio is re-transcribed group by group; a wrong transcription is reported.
+  // The joined audio is checked group by group without any transcription service.
   const e = await store.create({ counts: { 2: 2 }, fixed: true });
   e.groups = e.groups.map(fixedGroup);
   for (const g of e.groups)
-    for (const s of g.segments) await store.saveAudio(e, s, { wav: wavOf(2), transcript: s.text });
+    for (const s of g.segments) await store.saveAudio(e, s, { wav: wavOf(6), transcript: s.text });
+  e.groups[1].segments[0].transcript = "wrong words only";
   await store.write(e);
   const first = await post("listening-check", { id: e.id, index: 0 });
   assert.equal(first.status, 200);
   assert.equal(first.data.total, 2);
-  assert.equal(first.data.result.exact, false);
+  assert.equal(first.data.result.exact, true, JSON.stringify(first.data.result.problems));
+  const second = await post("listening-check", { id: e.id, index: 1 });
+  assert.equal(second.data.result.exact, false, "a take whose transcript differs is reported");
   assert.equal((await post("listening-check", { id: e.id, index: 2 })).data.done, true);
-  assert.equal((await store.read(e.id)).listeningCheck.results.length, 1);
+  assert.equal((await store.read(e.id)).listeningCheck.results.length, 2);
 
-  // Narration in the server uses the independent transcription: the bogus STT result rejects the take.
+  // Gemini narration is checked with the Live transcript and the length check only (no Flash call).
   await post("settings", { liveProvider: "gemini", liveModel: "live-1" });
   await post("models", { provider: "gemini" });
   const live = await post("test-live", { script: "single" });
-  assert.equal(live.status, 422);
-  assert.equal(live.data.detail.transcript, "wrong words only");
+  assert.equal(live.status, 200);
+  // Questions are written by Codex only.
+  assert.equal((await post("settings", { textProvider: "gemini" })).status, 400);
 });
 
 test("Part 3/4 sets carry their type, graphic table and quoted lines as in the real test", async () => {

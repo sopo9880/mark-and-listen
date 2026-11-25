@@ -217,7 +217,7 @@ test("server: rename, notebook mastery, delete and static UI modules", async (t)
     const n = Number(/exactly (\d+) original/.exec(prompt)[1]);
     return JSON.stringify(cbtQuestions(n));
   };
-  const { server } = await buildServer({ root, updater, autoUpdate: false, generate });
+  const { server } = await buildServer({ root, updater, autoUpdate: false, codex: generate });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   t.after(() => {
     server.closeAllConnections();
@@ -234,7 +234,6 @@ test("server: rename, notebook mastery, delete and static UI modules", async (t)
     return { status: r.status, data: await r.json() };
   };
   assert.equal((await post("episodes", { exam: "cbt", config: { subjects: [] } })).status, 400);
-  await post("settings", { textProvider: "gemini", keyProvider: "gemini", apiKey: "MOCK-KEY" });
   const { data: e } = await post("episodes", {
     exam: "cbt",
     title: "t",

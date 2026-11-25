@@ -124,7 +124,9 @@ test("TOEIC Part 1 uses bundled photos, swaps a photo that fails validation and 
       answer: 0,
     });
   };
-  const { server } = await buildServer({ root, photoRoot: dir, updater, autoUpdate: false, generate });
+  // Photo questions are written by Codex (with the photo as an --image attachment).
+  const codex = (args) => generate({ ...args, provider: "codex" });
+  const { server } = await buildServer({ root, photoRoot: dir, updater, autoUpdate: false, codex });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   t.after(() => {
     server.closeAllConnections();
@@ -150,11 +152,7 @@ test("TOEIC Part 1 uses bundled photos, swaps a photo that fails validation and 
   assert.ok(e.groups.every((g) => g.photoHash && g.image.startsWith("/api/photo/")));
   assert.equal((await fetch(base + e.groups[0].image)).status, 200);
 
-  await post("settings", { visionProvider: "gemini" });
-  const missingKey = await post("produce", { id: e.id });
-  assert.equal(missingKey.status, 400);
-  assert.match(missingKey.data.error, /사진 문항 엔진/);
-  await post("settings", { keyProvider: "gemini", apiKey: "MOCK-KEY" });
+  assert.equal((await post("settings", { visionProvider: "gemini" })).status, 400, "Codex only");
   const firstPhoto = e.groups[0].photoHash;
   let r = await post("produce", { id: e.id });
   assert.equal(r.status, 200);
@@ -164,7 +162,7 @@ test("TOEIC Part 1 uses bundled photos, swaps a photo that fails validation and 
   const ready = r.data.episode;
   assert.ok(ready.groups.every((g) => g.verified && g.questions[0].part === 1));
   assert.match(ready.groups[0].segments[0].text, /^A\. A man is using a stapler\.\nB\./);
-  assert.ok(visionCalls.every((c) => c.provider === "gemini"));
+  assert.ok(visionCalls.every((c) => c.provider === "codex" && c.images >= 1));
   assert.equal(new Set(ready.groups.map((g) => g.photoHash)).size, 2);
 });
 
@@ -193,7 +191,7 @@ test("text groups are re-solved by a separate call and regenerated when the key 
     photoRoot: dir,
     updater,
     autoUpdate: false,
-    generate,
+    codex: (args) => generate({ ...args, provider: "codex" }),
     testMode: false,
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
@@ -212,7 +210,6 @@ test("text groups are re-solved by a separate call and regenerated when the key 
         body: JSON.stringify(data),
       })
     ).json();
-  await post("settings", { textProvider: "gemini", keyProvider: "gemini", apiKey: "MOCK-KEY" });
   const e = await post("episodes", { exam: "toeic", counts: { 5: 1 } });
   let r = await post("produce", { id: e.id });
   assert.equal(r.episode.groups[0].status, "pending");

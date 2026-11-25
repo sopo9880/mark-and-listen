@@ -281,6 +281,9 @@ export async function render(page, { params, go }) {
               h("strong", { text: r.label }),
               h("small", { class: "muted", text: `${r.seconds}초` }),
             ),
+            r.problems?.length
+              ? h("ul", { class: "error-text" }, ...r.problems.map((t) => h("li", { text: t })))
+              : null,
             diffView({ exact: r.exact, missing: r.missing, added: r.added, ops: r.ops }, r.transcript),
           ),
         ),
@@ -316,7 +319,7 @@ export async function render(page, { params, go }) {
           { kind: "primary", iconName: "play", disabled: !p.segmentsReady },
         ),
         button(
-          "합친 음원 전사 검증",
+          "합친 음원 검증",
           async () => {
             const list = [];
             for (let index = 0; ; index++) {
@@ -324,11 +327,11 @@ export async function render(page, { params, go }) {
               if (r.done) break;
               list.push(r.result);
               drawResults(list);
-              toast(`전사 검증 ${index + 1}/${r.total}`, "info", 1200);
+              toast(`검증 ${index + 1}/${r.total}`, "info", 1200);
             }
             const bad = list.filter((r) => !r.exact).length;
             toast(
-              bad ? `불일치 ${bad}곳을 찾았습니다.` : "합친 음원이 모두 대본과 일치합니다.",
+              bad ? `문제 ${bad}곳을 찾았습니다.` : "합친 음원의 모든 구간이 대본·타임라인과 맞습니다.",
               bad ? "error" : "ok",
               6000,
             );

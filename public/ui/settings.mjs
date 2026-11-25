@@ -12,16 +12,14 @@ export async function render(page, { go }) {
   const generation = engineCard(settings, {
     iconName: "sparkle",
     title: "문항 생성 엔진",
-    desc: "모든 시험관의 AI 출제와 내부 정답 검증에 사용합니다. 다른 엔진으로 자동 전환하지 않습니다.",
-    providerKey: "textProvider",
+    desc: "모든 시험관의 AI 출제와 내부 정답 검증은 Codex가 합니다.",
     modelKey: "textModel",
     saved: "문항 생성 설정을 저장했습니다.",
   });
   const vision = engineCard(settings, {
     iconName: "eye",
     title: "사진 문항 엔진",
-    desc: "앱에 내장된 Part 1 사진을 직접 보고 문항을 만든 뒤, 별도 호출로 정답 유일성·모호함·장면 중복을 검사합니다. 이미지 입력을 지원하는 모델을 고르세요.",
-    providerKey: "visionProvider",
+    desc: "앱에 내장된 Part 1 사진을 Codex가 직접 보고 문항을 만든 뒤, 별도 호출로 정답 유일성·모호함·장면 중복을 검사합니다.",
     modelKey: "visionModel",
     saved: "사진 문항 엔진을 저장했습니다.",
   });
@@ -113,13 +111,6 @@ export async function render(page, { go }) {
     maxLength: 160,
     placeholder: "자동",
   });
-  const sttMode = select(
-    [
-      ["auto", "별도 전사 모델 (바쁘면 Live 자막으로)"],
-      ["live", "Live 자막만 (빠름·호출 적음)"],
-    ],
-    settings.sttMode ?? "auto",
-  );
   const liveKey = h("input", { class: "input", type: "password", autocomplete: "off", spellcheck: false });
   const model = select(
     [[settings.liveModel || "", settings.liveModel || "모델 목록을 새로고침하세요"]],
@@ -189,19 +180,10 @@ export async function render(page, { go }) {
       ),
     ),
     h("div", { class: "grid-2" }, field("Live 오디오 모델", model), field("낭독 테스트 대본", script)),
-    h(
-      "div",
-      { class: "grid-2" },
-      field(
-        "전사 검증 방식",
-        sttMode,
-        "어느 방식이든 음원 길이가 대본에 맞는지는 항상 검사합니다(한 단어만 든 음원 차단).",
-      ),
-      field(
-        "전사 검증 모델 · 비우면 자동",
-        sttModel,
-        "별도 전사일 때 사용합니다. 응답이 503 등으로 바쁘면 잠시 뒤 다시, 다른 Flash 모델로 시도합니다.",
-      ),
+    field(
+      "전사 검증 모델 · OpenAI 전용 · 비우면 gpt-transcribe",
+      sttModel,
+      "Gemini는 Live만 사용합니다: Live 자막과 음원 길이 검사로 확인하고(한 단어만 든 음원 차단) Flash 등 다른 모델은 부르지 않습니다.",
     ),
     h(
       "div",
@@ -214,7 +196,6 @@ export async function render(page, { go }) {
             liveProvider,
             liveModel: model.value,
             sttModel: sttModel.value.trim(),
-            sttMode: sttMode.value,
           });
           settings.liveModel = model.value;
           toast("Live 모델을 저장했습니다. 기존 음원은 유지됩니다.", "ok");
@@ -472,127 +453,79 @@ function head(ic, title, sub) {
   );
 }
 
-/** Engine picker shared by question generation and photo questions: provider, model list or free entry, saved key. */
-function engineCard(settings, { iconName, title, desc, providerKey, modelKey, saved }) {
-  let provider = settings[providerKey] ?? "codex";
+/** Codex engine card shared by question generation and photo questions: model dropdown or free entry. */
+function engineCard(settings, { iconName, title, desc, modelKey, saved }) {
   let current = settings[modelKey] ?? "";
-  const keyInput = h("input", { class: "input", type: "password", autocomplete: "off", spellcheck: false });
-  const keyBox = h("div", { class: "stack" });
-  const modelBox = h("div", { class: "stack" });
-  const manual = h("input", { class: "input", type: "text", value: current, maxLength: 160 });
-  let list = select([["", "공급자 기본 모델"]], "");
-  let models = [];
-
-  const keyField = () => {
-    const has = settings.keys[provider];
-    keyInput.placeholder = has ? "저장된 키 사용 중 · 바꾸려면 새 키 입력" : "API 키";
-    keyBox.replaceChildren(
-      field("API 키 · 이 PC에 암호화해 저장", keyInput, "앱을 껐다 켜거나 업데이트해도 유지됩니다."),
-      has
-        ? h(
-            "div",
-            { class: "row" },
-            button(
-              "저장된 키 삭제",
-              async () => {
-                await api("settings", { keyProvider: provider, apiKey: "" });
-                settings.keys[provider] = false;
-                await loadConnections();
-                sync();
-              },
-              { small: true, kind: "ghost", iconName: "trash" },
-            ),
-          )
-        : null,
-    );
-  };
-  const loadModels = async () => {
-    models = (await api("text-models", { provider })).models;
-    sync();
-  };
-  const sync = () => {
-    keyBox.hidden = provider === "codex";
-    if (provider !== "codex") keyField();
-    if (provider === "codex") {
-      manual.placeholder = "비우면 Codex 기본 모델 (예: gpt-5.5)";
-      modelBox.replaceChildren(field("Codex 모델", manual, "Codex CLI의 --model 값으로 전달됩니다."));
-      return;
-    }
+  let models = [],
+    defaultModel = null;
+  const manual = h("input", {
+    class: "input",
+    type: "text",
+    value: current,
+    maxLength: 160,
+    placeholder: "모델 ID",
+  });
+  const manualField = field("모델 ID 직접 입력", manual);
+  const box = h("div", { class: "stack" });
+  let list;
+  const draw = () => {
     const known = models.some((m) => m.id === current);
     list = select(
       [
-        ["", "공급자 기본 모델"],
+        ["", defaultModel ? `Codex 기본 모델 (${defaultModel})` : "Codex 기본 모델"],
         ...models.map((m) => [m.id, m.label === m.id ? m.id : `${m.label} · ${m.id}`]),
         ["__manual", "직접 입력…"],
       ],
       known ? current : current ? "__manual" : "",
-      { onchange: () => sync2() },
+      { onchange: () => (manualField.hidden = list.value !== "__manual") },
     );
-    const sync2 = () => {
-      manualField.hidden = list.value !== "__manual";
-    };
-    manual.placeholder = "모델 ID";
-    const manualField = field("모델 ID 직접 입력", manual);
-    modelBox.replaceChildren(
+    manualField.hidden = list.value !== "__manual";
+    box.replaceChildren(
       h(
         "div",
         { class: "model-row" },
-        field(models.length ? `모델 (${models.length}개)` : "모델", list),
-        button("목록 불러오기", loadModels, { iconName: "refresh", disabled: !settings.keys[provider] }),
+        field(models.length ? `Codex 모델 (${models.length}개)` : "Codex 모델", list),
+        button("목록 새로고침", load, { iconName: "refresh" }),
       ),
       manualField,
+      h("p", {
+        class: "muted small",
+        text: models.length
+          ? "이 PC의 Codex가 로그인한 계정으로 받아 둔 모델 목록입니다. 선택한 값은 Codex CLI의 --model로 전달됩니다."
+          : "Codex 모델 목록을 찾지 못했습니다. Codex에 로그인해 한 번 실행하면 목록이 생깁니다. 그 전에는 직접 입력하세요.",
+      }),
     );
-    sync2();
   };
+  async function load() {
+    try {
+      ({ models, defaultModel } = await api("codex-models", {}));
+    } catch {
+      models = [];
+    }
+    draw();
+  }
   const cardEl = card(
     {},
     head(iconName, title, desc),
-    field(
-      "엔진",
-      segmented(
-        [
-          ["codex", "Codex · ChatGPT 로그인"],
-          ["openai", "GPT API"],
-          ["gemini", "Gemini API"],
-        ],
-        provider,
-        (v) => {
-          provider = v;
-          current = "";
-          manual.value = "";
-          models = [];
-          sync();
-          if (provider !== "codex" && settings.keys[provider]) loadModels().catch(() => {});
-        },
-      ),
-    ),
-    keyBox,
-    modelBox,
+    h("div", { class: "row" }, h("span", { class: "chip chip-info", text: "Codex · ChatGPT 로그인" })),
+    box,
     h(
       "div",
       { class: "row end" },
       button(
         "저장",
         async () => {
-          if (provider !== "codex" && keyInput.value) {
-            await api("settings", { keyProvider: provider, apiKey: keyInput.value });
-            settings.keys[provider] = true;
-            keyInput.value = "";
-          }
-          const model = provider === "codex" || list.value === "__manual" ? manual.value.trim() : list.value;
-          await api("settings", { [providerKey]: provider, [modelKey]: model });
-          settings[providerKey] = provider;
+          const model = list.value === "__manual" ? manual.value.trim() : list.value;
+          await api("settings", { [modelKey]: model });
           settings[modelKey] = current = model;
-          await loadConnections();
-          sync();
-          if (provider !== "codex" && !models.length) loadModels().catch(() => {});
+          draw();
           toast(saved, "ok");
         },
         { kind: "primary" },
       ),
     ),
   );
-  sync();
-  if (provider !== "codex" && settings.keys[provider]) loadModels().catch(() => {});
+  draw();
+  void load();
   return { card: cardEl };
 }
