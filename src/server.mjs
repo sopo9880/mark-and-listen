@@ -29,7 +29,8 @@ import { createCodexUpdater } from "./codex-updater.mjs";
 import { generateWithCodex, codexLoginStatus, codexBrowserLogin } from "./codex-engine.mjs";
 import { generateWithProvider } from "./providers.mjs";
 import { listLiveModels, listTextModels, credentials } from "./live-models.mjs";
-import { auditionWithGeminiLive, wavFromPcm } from "./gemini-live.mjs";
+import { wavFromPcm } from "./gemini-live.mjs";
+import { createGeminiLivePool } from "./gemini-live-pool.mjs";
 import { auditionWithOpenAILive } from "./openai-live.mjs";
 export const VERSION = APP_VERSION;
 const PUBLIC = fileURLToPath(new URL("../public/", import.meta.url));
@@ -245,9 +246,10 @@ export async function buildServer({
       updateBusy = false;
     }
   };
+  // Gemini narration reuses open Live sessions (one per model and voice) across segments.
+  const geminiPool = live ? null : createGeminiLivePool();
   const speak =
-    live ??
-    ((args) => (args.provider === "gemini" ? auditionWithGeminiLive(args) : auditionWithOpenAILive(args)));
+    live ?? ((args) => (args.provider === "gemini" ? geminiPool.speak(args) : auditionWithOpenAILive(args)));
   const getKey = (p) => keys[p] || process.env[p === "gemini" ? "GEMINI_API_KEY" : "OPENAI_API_KEY"];
   async function connectionStates() {
     const installed = await updater.executable();
@@ -983,5 +985,6 @@ export async function buildServer({
     if (autoUpdate && settings.autoUpdate) void performUpdate();
   });
   server.requestTimeout = 310000;
+  server.on("close", () => geminiPool?.closeAll());
   return { server, store };
 }

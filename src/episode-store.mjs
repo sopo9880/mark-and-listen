@@ -15,6 +15,8 @@ import {
 import { startAttempt, advanceAttempt, markAttempt, finishPhase } from "../public/lib/attempt.mjs";
 import { scoreAttempt } from "../public/lib/scoring.mjs";
 
+import { levelWav } from "./audio-level.mjs";
+
 export { transcriptDiff } from "./narration.mjs";
 
 const valid = (id) => typeof id === "string" && /^[a-zA-Z0-9-]{1,90}$/.test(id);
@@ -130,7 +132,8 @@ export class EpisodeStore {
     return join(this.root, eid, sid + ".wav");
   }
   async saveAudio(e, s, result) {
-    const wav = result.wav;
+    validateWav(result.wav);
+    const wav = levelWav(result.wav);
     const rate = validateWav(wav);
     const dir = join(this.root, e.id);
     await mkdir(dir, { recursive: true });

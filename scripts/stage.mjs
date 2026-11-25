@@ -23,7 +23,11 @@ async function walk(path) {
     if (item.isDirectory()) await walk(name);
     else {
       const bundledPhoto = /[\\/]assets[\\/]part1-photos[\\/][0-9a-f]{16}\.jpg$/.test(name);
-      if ((/\.(mp3|wav|ogg|jpe?g)$/i.test(name) && !bundledPhoto) || /electron|codex\.exe/i.test(name))
+      const bundledDirection = /[\\/]assets[\\/]directions[\\/][a-z0-9-]+\.wav$/.test(name);
+      if (
+        (/\.(mp3|wav|ogg|jpe?g)$/i.test(name) && !bundledPhoto && !bundledDirection) ||
+        /electron|codex\.exe/i.test(name)
+      )
         throw Error("Forbidden bundled payload: " + name);
       size += (await stat(name)).size;
     }
@@ -31,7 +35,7 @@ async function walk(path) {
 }
 await walk(base + "/app");
 console.log(
-  `Staged ${release ? "release" : "test"} app bytes (bundled Part 1 photos, no Electron, audio or Codex): ` +
+  `Staged ${release ? "release" : "test"} app bytes (bundled Part 1 photos and direction clips, no Electron or Codex): ` +
     size,
 );
 
