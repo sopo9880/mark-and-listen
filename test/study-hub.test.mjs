@@ -303,8 +303,8 @@ test("test mode joins the listening section into one WAV with the exam's pauses"
   const res = await fetch(`http://127.0.0.1:${server.address().port}/api/listening/${e.id}.wav`);
   assert.equal(res.status, 200);
   const wav = Buffer.from(await res.arrayBuffer());
-  // Two 0.1 s segments; the second starts after 0.1 s + 0.35 s pause + 1 question × 5 s of answer time.
-  const expectedSamples = Math.round(5.45 * 24000) + 2400;
+  // Two Part 2 items of 0.1 s; the second starts after the first item plus 5 s of answer time.
+  const expectedSamples = Math.round(5.1 * 24000) + 2400;
   assert.equal((wav.length - 44) / 2, expectedSamples);
   assert.equal(wav.readUInt32LE(24), 24000);
 });

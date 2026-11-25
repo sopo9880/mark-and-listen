@@ -221,16 +221,75 @@ export function phaseDurations(e) {
   return out;
 }
 
+/** Pauses used both by the exam player and by the joined listening file (seconds). */
+export const GAPS = { turn: 0.35, cue: 0.6, part12: 5, part34: 8, directions: 1.5 };
+
+/** Episodes with exactly the 100 TOEIC listening questions get directions and question-number cues. */
+export const isFullListening = (e) => {
+  if (e.exam !== "toeic") return false;
+  const c = questionCounts(e);
+  return c[1] === 6 && c[2] === 25 && c[3] === 39 && c[4] === 30;
+};
+
+/**
+ * The listening section as played in the exam: optional direction/number clips (e.directions, full LC only),
+ * every segment, and the answer time a real test leaves — 5 s after each Part 1/2 item, 8 s after each Part 3/4
+ * question, a short breath between conversation turns.
+ */
 export function audioTimeline(e) {
-  let at = 0;
+  const clips = e.directions?.clips ?? null;
   const list = [];
-  for (const g of e.groups.filter((g) => isAudioGroup(e, g))) {
-    for (const s of g.segments) {
-      list.push({ ...s, groupId: g.id, start: at, end: at + s.duration });
-      at += s.duration + 0.35;
+  let at = 0;
+  const add = (entry, duration, gap) => {
+    list.push({ ...entry, start: at, end: at + duration });
+    at += duration + gap;
+  };
+  const cue = (key, gap, groupId = null) => {
+    const c = clips?.[key];
+    if (c)
+      add(
+        {
+          id: `dir-${key}`,
+          kind: "direction",
+          key,
+          groupId,
+          audio: `/api/directions/${key}.wav`,
+          text: c.text,
+          speaker: "narrator",
+          status: "ready",
+          duration: c.duration,
+        },
+        c.duration,
+        gap,
+      );
+  };
+  cue("lc-intro", GAPS.directions);
+  let number = 0,
+    lastPart = 0;
+  for (const g of e.groups) {
+    if (!isAudioGroup(e, g)) {
+      number += g.count;
+      continue;
     }
-    at += g.count * 5;
+    if (g.part !== lastPart) {
+      cue(`p${g.part}-directions`, GAPS.directions);
+      lastPart = g.part;
+    }
+    const segs = g.segments ?? [];
+    const onePerQuestion = g.part <= 2 && segs.length === g.count;
+    const firstQuestion = g.part >= 3 ? Math.max(0, segs.length - g.count) : 0;
+    if (g.part >= 3) cue(`intro-${number + 1}-${number + g.count}`, GAPS.cue, g.id);
+    segs.forEach((s, i) => {
+      const isQuestion = onePerQuestion || (g.part >= 3 && i >= firstQuestion);
+      if (isQuestion) cue(`num-${number + 1 + (g.part >= 3 ? i - firstQuestion : i)}`, GAPS.cue, g.id);
+      const gap = !isQuestion ? GAPS.turn : g.part <= 2 ? GAPS.part12 : GAPS.part34;
+      add({ ...s, kind: "segment", groupId: g.id }, s.duration ?? 0, gap);
+    });
+    // Episodes from 0.1.x read Part 1/2 choices as separate clips: leave the answer time after the item.
+    if (g.part <= 2 && !onePerQuestion) at += g.count * GAPS.part12;
+    number += g.count;
   }
+  cue("lc-end", 0);
   return list;
 }
 

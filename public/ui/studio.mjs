@@ -266,6 +266,26 @@ export async function render(page, { params, go }) {
   function listenCard(e, p) {
     if (!p.hasAudio) return h("div");
     const slot = h("div", { class: "stack" });
+    const results = h("div", { class: "check-list" });
+    const drawResults = (list) =>
+      results.replaceChildren(
+        ...(list ?? []).map((r) =>
+          h(
+            "details",
+            { class: ["check-item", r.exact ? "ok" : "bad"], open: !r.exact },
+            h(
+              "summary",
+              {},
+              chip(r.exact ? "일치" : "불일치", r.exact ? "ok" : "danger"),
+              h("strong", { text: r.label }),
+              h("small", { class: "muted", text: `${r.seconds}초` }),
+            ),
+            diffView({ exact: r.exact, missing: r.missing, added: r.added, ops: r.ops }, r.transcript),
+          ),
+        ),
+      );
+    drawResults(e.listeningCheck?.results);
+    const directions = !!e.directions;
     return card(
       { class: "test-card" },
       h(
@@ -276,14 +296,14 @@ export async function render(page, { params, go }) {
       ),
       h("p", {
         class: "muted small",
-        text: "준비된 LC 음원 전체를 시험과 같은 순서·간격(구간 사이 0.35초, 묶음 뒤 문항당 5초)으로 이어 붙여 재생합니다.",
+        text: `시험과 같은 타임라인으로 이어 붙입니다: Part 1·2는 문항마다 5초, Part 3·4는 질문마다 8초 답안 시간, 대화 사이 0.35초${directions ? ", 안내 방송과 문항 번호 포함" : " (안내 방송·문항 번호는 전체 LC 회차에만 들어갑니다)"}.`,
       }),
       h(
         "div",
         { class: "row" },
         button(
           p.segmentsReady ? `전체 듣기 (${p.segmentsReady}/${p.segments} 구간)` : "준비된 음원 없음",
-          () => {
+          () =>
             slot.replaceChildren(
               h("audio", {
                 controls: true,
@@ -291,12 +311,32 @@ export async function render(page, { params, go }) {
                 preload: "auto",
                 src: `/api/listening/${id}.wav?t=${Date.now()}`,
               }),
+            ),
+          { kind: "primary", iconName: "play", disabled: !p.segmentsReady },
+        ),
+        button(
+          "합친 음원 전사 검증",
+          async () => {
+            const list = [];
+            for (let index = 0; ; index++) {
+              const r = await api("listening-check", { id, index });
+              if (r.done) break;
+              list.push(r.result);
+              drawResults(list);
+              toast(`전사 검증 ${index + 1}/${r.total}`, "info", 1200);
+            }
+            const bad = list.filter((r) => !r.exact).length;
+            toast(
+              bad ? `불일치 ${bad}곳을 찾았습니다.` : "합친 음원이 모두 대본과 일치합니다.",
+              bad ? "error" : "ok",
+              6000,
             );
           },
-          { kind: "primary", iconName: "play", disabled: !p.segmentsReady },
+          { iconName: "check", disabled: !p.segmentsReady || production.running },
         ),
       ),
       slot,
+      results,
     );
   }
 

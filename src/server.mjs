@@ -8,9 +8,12 @@ import {
   photoPath,
 } from "./photo-pilot.mjs";
 import { PhotoLibrary } from "./photo-library.mjs";
-import { verifiedNarration } from "./narration.mjs";
+import { verifiedNarration, transcriptDiff } from "./narration.mjs";
 import { solvePrompt, checkAnswers } from "./verify.mjs";
 import { TEST_MODE } from "./build-info.mjs";
+import { createSecretStore } from "./secrets.mjs";
+import { transcribeWav } from "./stt.mjs";
+import { DirectionBundle } from "./directions.mjs";
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
 import { readFile, writeFile, mkdir, stat, rename } from "node:fs/promises";
@@ -19,18 +22,19 @@ import { join, extname } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { EpisodeStore, notebookEntries, validateWav } from "./episode-store.mjs";
-import { isAudioGroup, audioTimeline } from "../public/lib/exams.mjs";
+import { isAudioGroup, audioTimeline, isFullListening } from "../public/lib/exams.mjs";
 import { isOpen } from "../public/lib/attempt.mjs";
 import { groupPrompt, parseGroup, fixedGroup } from "./episode-content.mjs";
 import { createCodexUpdater } from "./codex-updater.mjs";
 import { generateWithCodex, codexLoginStatus, codexBrowserLogin } from "./codex-engine.mjs";
 import { generateWithProvider } from "./providers.mjs";
-import { listLiveModels, credentials } from "./live-models.mjs";
+import { listLiveModels, listTextModels, credentials } from "./live-models.mjs";
 import { auditionWithGeminiLive, wavFromPcm } from "./gemini-live.mjs";
 import { auditionWithOpenAILive } from "./openai-live.mjs";
 export const VERSION = APP_VERSION;
 const PUBLIC = fileURLToPath(new URL("../public/", import.meta.url));
 const BUNDLED_PHOTOS = fileURLToPath(new URL("../assets/part1-photos/", import.meta.url));
+const BUNDLED_DIRECTIONS = fileURLToPath(new URL("../assets/directions/", import.meta.url));
 const dataRoot = () =>
   process.env.MARK_LISTEN_DATA ||
   join(
@@ -54,24 +58,42 @@ const json = async (req) => {
   }
 };
 /** Test mode: the whole listening section as one WAV, with the same pauses the exam timeline uses. */
-export async function listeningWav(store, e) {
-  const timeline = audioTimeline(e).filter((s) => s.status === "ready");
-  if (!timeline.length) throw Object.assign(Error("준비된 듣기 음원이 없습니다."), { status: 409 });
+/** Linear resampling of 16-bit mono PCM (used only when a bundled clip and Live audio differ in rate). */
+function resample(pcm, from, to) {
+  if (from === to) return pcm;
+  const n = Math.floor(((pcm.length / 2) * to) / from);
+  const out = Buffer.alloc(n * 2);
+  for (let i = 0; i < n; i++) {
+    const x = (i * from) / to,
+      k = Math.floor(x),
+      f = x - k;
+    const a = pcm.readInt16LE(Math.min(k, pcm.length / 2 - 1) * 2),
+      b = pcm.readInt16LE(Math.min(k + 1, pcm.length / 2 - 1) * 2);
+    out.writeInt16LE(Math.round(a + (b - a) * f), i * 2);
+  }
+  return out;
+}
+
+/** Joins timeline entries into one WAV, keeping each entry at its exam start time (gaps become silence). */
+export async function joinTimeline(store, e, entries, directions) {
+  if (!entries.length) throw Object.assign(Error("준비된 듣기 음원이 없습니다."), { status: 409 });
   const chunks = [];
   let rate = 0,
     size = 0,
-    at = 0;
-  for (const seg of timeline) {
-    const wav = await readFile(await store.audio(e.id, seg.id));
+    at = entries[0].start;
+  for (const seg of entries) {
+    const wav =
+      seg.kind === "direction"
+        ? await directions.read(seg.key)
+        : await readFile(await store.audio(e.id, seg.id));
     const r = validateWav(wav);
-    if (rate && r !== rate) throw Object.assign(Error("음원 샘플링 속도가 서로 다릅니다."), { status: 409 });
-    rate = r;
+    rate ||= r;
     const gap = Math.max(0, Math.round((seg.start - at) * rate)) * 2;
     if (gap) {
       chunks.push(Buffer.alloc(gap));
       size += gap;
     }
-    const pcm = wav.subarray(44);
+    const pcm = resample(wav.subarray(44), r, rate);
     chunks.push(pcm);
     size += pcm.length;
     at = seg.start + pcm.length / 2 / rate;
@@ -79,16 +101,62 @@ export async function listeningWav(store, e) {
   return wavFromPcm(chunks, size, rate);
 }
 
+/** Test mode: the whole listening section as one WAV, with the same pauses the exam timeline uses. */
+export async function listeningWav(store, e, directions) {
+  return joinTimeline(
+    store,
+    e,
+    audioTimeline(e).filter((s) => s.status === "ready"),
+    directions,
+  );
+}
+
+/** Consecutive timeline entries of one question group (or one run of directions), for chunked re-transcription. */
+export function listeningChunks(e) {
+  const out = [];
+  for (const entry of audioTimeline(e)) {
+    const key = entry.groupId ?? "directions";
+    const last = out.at(-1);
+    if (last && last.key === key) last.entries.push(entry);
+    else out.push({ key, entries: [entry] });
+  }
+  return out;
+}
+
+const VOICES = {
+  gemini: { f: ["Kore", "Aoede", "Leda", "Zephyr"], m: ["Puck", "Charon", "Orus", "Fenrir"] },
+  openai: { f: ["marin", "coral", "sage", "shimmer"], m: ["cedar", "ash", "ballad", "verse"] },
+};
+
+/** Voices rotate per question group; in a conversation the speakers always get different voices. */
+export function voiceFor(provider, e, g, s) {
+  const pool = VOICES[provider] ?? VOICES.gemini;
+  const n = Math.max(0, e.groups.indexOf(g));
+  const first = n % 2 ? "m" : "f",
+    other = first === "f" ? "m" : "f";
+  const pick = (gender, k) => pool[gender][(Math.floor(n / 2) + k) % 4];
+  if (s.speaker === "A") return pick(first, 0);
+  if (s.speaker === "B") return pick(other, 0);
+  if (s.speaker === "C") return pick(first, 1);
+  // Narrator: Part 1/2 items and Part 4 talks rotate; Part 3 questions use a voice not used by the speakers.
+  return g.part === 3 ? pick(other, 2) : pick(n % 4 < 2 ? "f" : "m", n);
+}
+
 export async function buildServer({
   root = dataRoot(),
   photoRoot = BUNDLED_PHOTOS,
+  directionsRoot = BUNDLED_DIRECTIONS,
   testMode = TEST_MODE,
+  stt,
+  secretCodec,
   updater,
   generate = generateWithProvider,
   codex = generateWithCodex,
   live,
   models = listLiveModels,
+  textModels = listTextModels,
   autoUpdate = true,
+  autoConnect = autoUpdate,
   smoke = false,
 } = {}) {
   const appUpdate = createAppUpdater({ publicKey: UPDATE_PUBLIC_KEY });
@@ -110,13 +178,28 @@ export async function buildServer({
     textModel: "",
     visionProvider: "codex",
     visionModel: "",
+    sttModel: "",
   };
   try {
     settings = { ...settings, ...JSON.parse(await readFile(join(root, "settings.json"), "utf8")) };
   } catch (e) {
     if (e.code !== "ENOENT") throw e;
   }
-  const keys = {};
+  const secretStore = createSecretStore(join(root, "keys.json"), secretCodec);
+  const keys = await secretStore.load();
+  let keySaveError = false;
+  const directions = new DirectionBundle(directionsRoot);
+  const audioChecks = !live || !!stt;
+  const sttCall = (provider, wav, signal) =>
+    (stt ?? transcribeWav)({
+      provider,
+      apiKey: getKey(provider),
+      wav,
+      model: settings.sttModel || undefined,
+      signal,
+    });
+  const narrationChecks = (provider, signal) =>
+    audioChecks ? { duration: true, transcribe: (wav) => sttCall(provider, wav, signal) } : {};
   const connections = {};
   let loginTask = null;
   let uiReady = false,
@@ -183,6 +266,23 @@ export async function buildServer({
     }
   }
 
+  // Connection states are checked on start-up, after a key changes and every 10 minutes, without user action.
+  let refreshing = null;
+  function refreshConnections() {
+    refreshing ??= (async () => {
+      const exe = await updater.executable().catch(() => null);
+      if (exe && !loginTask) {
+        try {
+          connections.codex = await codexLoginStatus(exe);
+        } catch {
+          connections.codex = "error";
+        }
+      }
+      for (const p of ["gemini", "openai"]) if (getKey(p)) await checkedModels(p).catch(() => {});
+    })().finally(() => (refreshing = null));
+    return refreshing;
+  }
+
   async function liveArgs() {
     const provider = settings.liveProvider,
       apiKey = getKey(provider),
@@ -246,9 +346,20 @@ export async function buildServer({
         send(res, { uiReady });
         return;
       }
+      const direction = /^\/api\/directions\/([a-z0-9-]+)\.wav$/.exec(path);
+      if (direction && ["GET", "HEAD"].includes(req.method)) {
+        const wav = await directions.read(direction[1]);
+        res.writeHead(200, {
+          "Content-Type": "audio/wav",
+          "Content-Length": wav.length,
+          "Cache-Control": "private, max-age=86400",
+        });
+        res.end(req.method === "HEAD" ? undefined : wav);
+        return;
+      }
       const listening = /^\/api\/listening\/([a-zA-Z0-9-]+)\.wav$/.exec(path);
       if (listening && testMode && ["GET", "HEAD"].includes(req.method)) {
-        const wav = await listeningWav(store, await store.read(listening[1]));
+        const wav = await listeningWav(store, await store.read(listening[1]), directions);
         res.writeHead(200, { "Content-Type": "audio/wav", "Content-Length": wav.length });
         res.end(req.method === "HEAD" ? undefined : wav);
         return;
@@ -282,6 +393,7 @@ export async function buildServer({
           updateBusy,
           updateError,
           dataRoot: root,
+          keySaveError,
         });
         return;
       }
@@ -306,8 +418,18 @@ export async function buildServer({
         if (path === "/api/settings") {
           if (busy || updateBusy) throw fail(409, "현재 작업이 끝난 후 설정을 바꾸세요.");
           if (b.keyProvider) {
-            credentials(b.keyProvider, b.apiKey);
-            keys[b.keyProvider] = b.apiKey;
+            if (b.apiKey === "" && ["gemini", "openai"].includes(b.keyProvider)) delete keys[b.keyProvider];
+            else {
+              credentials(b.keyProvider, b.apiKey);
+              keys[b.keyProvider] = b.apiKey;
+            }
+            try {
+              await secretStore.save(keys);
+            } catch {
+              // The key still works for this session; it just could not be written to disk.
+              keySaveError = true;
+            }
+            if (autoConnect) void refreshConnections();
             connections[b.keyProvider] = "unverified";
             modelCache.delete(b.keyProvider);
           }
@@ -317,7 +439,7 @@ export async function buildServer({
               if (!allowed.includes(b[k])) throw fail(400, "공급자 오류");
               settings[k] = b[k];
             }
-          for (const k of ["liveModel", "textModel", "visionModel"])
+          for (const k of ["liveModel", "textModel", "visionModel", "sttModel"])
             if (b[k] !== undefined) {
               if (typeof b[k] !== "string" || b[k].length > 160 || !/^[a-zA-Z0-9_.:-]*$/.test(b[k]))
                 throw fail(400, "모델 ID 오류");
@@ -355,6 +477,16 @@ export async function buildServer({
             appUpdating = false;
             busy = false;
             throw fail(e.status || 502, e.message);
+          }
+          return;
+        }
+        if (path === "/api/text-models") {
+          if (!["gemini", "openai"].includes(b.provider)) throw fail(400, "API 공급자를 선택하세요.");
+          if (!getKey(b.provider)) throw fail(400, "먼저 API 키를 연결하세요.");
+          try {
+            send(res, { models: await textModels({ provider: b.provider, apiKey: getKey(b.provider) }) });
+          } catch (err) {
+            throw fail(502, err.message);
           }
           return;
         }
@@ -430,6 +562,46 @@ export async function buildServer({
           send(res, await attachPhotos(store, episode, photos));
           return;
         }
+        if (path === "/api/listening-check") {
+          if (!testMode) throw fail(404, "API 없음");
+          if (busy) throw fail(409, "제작 작업이 끝난 뒤 검사하세요.");
+          const e = await store.read(b.id);
+          const chunks = listeningChunks(e).filter((c) => c.entries.every((x) => x.status === "ready"));
+          const index = Number(b.index) || 0;
+          if (index >= chunks.length) {
+            send(res, { total: chunks.length, done: true, check: e.listeningCheck ?? null });
+            return;
+          }
+          const provider = settings.liveProvider;
+          if (!getKey(provider)) throw fail(400, "설정에서 Live 공급자의 API 키를 연결하세요.");
+          busy = true;
+          try {
+            const c = chunks[index];
+            const wav = await joinTimeline(store, e, c.entries, directions);
+            const transcript = await sttCall(provider, wav, AbortSignal.timeout(180000));
+            const diff = transcriptDiff(c.entries.map((x) => x.text).join("\n"), transcript);
+            const g = e.groups.find((x) => x.id === c.key);
+            const result = {
+              key: c.key,
+              label: g ? `${g.id} · Part ${g.part}` : "안내 방송",
+              seconds: Math.round(((wav.length - 44) / 2 / wav.readUInt32LE(24)) * 10) / 10,
+              exact: diff.exact,
+              missing: diff.missing,
+              added: diff.added,
+              ops: diff.ops,
+              transcript: transcript.slice(0, 6000),
+            };
+            if (index === 0 || !e.listeningCheck) e.listeningCheck = { at: Date.now(), results: [] };
+            e.listeningCheck.results = e.listeningCheck.results.filter((r) => r.key !== c.key).concat(result);
+            await store.write(e);
+            send(res, { total: chunks.length, index, result });
+          } catch (err) {
+            throw fail(err.status === 429 ? 429 : 502, err.message || "전사 검사 실패");
+          } finally {
+            busy = false;
+          }
+          return;
+        }
         if (path === "/api/episodes/swap-photo") {
           if (!testMode) throw fail(404, "API 없음");
           if (busy) throw fail(409, "제작 작업이 끝난 뒤 교체하세요.");
@@ -478,6 +650,13 @@ export async function buildServer({
               );
             }
             const e = await store.create(b);
+            if (isFullListening(e)) {
+              const snapshot = await directions.snapshot();
+              if (snapshot) {
+                e.directions = snapshot;
+                await store.write(e);
+              }
+            }
             send(res, picks ? await attachLibraryPhotos(store, e, picks) : e);
           } catch (e) {
             throw fail(400, e.message);
@@ -547,17 +726,21 @@ export async function buildServer({
             const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(300000)]);
             if (path === "/api/test-live") {
               const args = await liveArgs();
-              const r = await verifiedNarration(speak, {
-                ...args,
-                prompt:
-                  b.script === "choices"
-                    ? "A. The woman is arranging books.\nB. The window is closed.\nC. Three chairs are by the door.\nD. The table is not empty."
-                    : b.script === "single"
-                      ? "The meeting starts at ten fifteen."
-                      : "The meeting starts at ten fifteen. Please bring three copies.",
-                voice: args.provider === "gemini" ? "Kore" : "marin",
-                signal,
-              }).catch((e) => {
+              const r = await verifiedNarration(
+                speak,
+                {
+                  ...args,
+                  prompt:
+                    b.script === "choices"
+                      ? "A. The woman is arranging books.\nB. The window is closed.\nC. Three chairs are by the door.\nD. The table is not empty."
+                      : b.script === "single"
+                        ? "The meeting starts at ten fifteen."
+                        : "The meeting starts at ten fifteen. Please bring three copies.",
+                  voice: args.provider === "gemini" ? "Kore" : "marin",
+                  signal,
+                },
+                narrationChecks(args.provider, signal),
+              ).catch((e) => {
                 if (e.code === "NARRATION_MISMATCH")
                   throw Object.assign(fail(422, e.message), { detail: e.last });
                 throw e;
@@ -581,7 +764,12 @@ export async function buildServer({
               if (provider !== "codex" && !getKey(provider))
                 throw fail(400, "설정에서 문항 생성 엔진의 API 키를 연결하세요.");
               return provider === "codex"
-                ? codex({ executable: (await updater.executable()) ?? "codex", prompt, signal })
+                ? codex({
+                    executable: (await updater.executable()) ?? "codex",
+                    prompt,
+                    model: settings.textModel || undefined,
+                    signal,
+                  })
                 : generate({
                     provider,
                     apiKey: getKey(provider),
@@ -612,7 +800,7 @@ export async function buildServer({
                       group: g,
                       modelCall: ({ images, prompt }) =>
                         vision.provider === "codex"
-                          ? codex({ executable, prompt, images, signal })
+                          ? codex({ executable, prompt, images, model: vision.model || undefined, signal })
                           : generate({
                               provider: vision.provider,
                               model: vision.model || undefined,
@@ -691,17 +879,12 @@ export async function buildServer({
             }
             try {
               const args = await liveArgs();
-              const voice =
-                args.provider === "gemini"
-                  ? s.speaker === "B"
-                    ? "Puck"
-                    : s.speaker === "C"
-                      ? "Charon"
-                      : "Kore"
-                  : s.speaker === "B"
-                    ? "cedar"
-                    : "marin";
-              const result = await verifiedNarration(speak, { ...args, prompt: s.text, voice, signal });
+              const voice = voiceFor(args.provider, e, g, s);
+              const result = await verifiedNarration(
+                speak,
+                { ...args, prompt: s.text, voice, signal },
+                narrationChecks(args.provider, signal),
+              );
               await store.saveAudio(e, s, result);
               Object.assign(s, {
                 provider: args.provider,
@@ -709,6 +892,8 @@ export async function buildServer({
                 voice,
                 diff: result.diff,
                 attempts: result.attempts,
+                liveTranscript: result.liveTranscript,
+                sttChecked: result.sttChecked,
                 reviewed: true,
               });
               delete s.lastTake;
@@ -780,7 +965,13 @@ export async function buildServer({
   }, 60000);
   interval.unref();
   server.once("close", () => clearInterval(interval));
+  if (autoConnect) {
+    const connectTimer = setInterval(() => void refreshConnections(), 10 * 60000);
+    connectTimer.unref();
+    server.once("close", () => clearInterval(connectTimer));
+  }
   server.once("listening", () => {
+    if (autoConnect) void refreshConnections();
     if (autoUpdate && settings.autoUpdate) void performUpdate();
   });
   server.requestTimeout = 310000;

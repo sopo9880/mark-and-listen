@@ -8,7 +8,11 @@ use std::{
 };
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
+};
 
 struct Backend(Mutex<Child>);
 
@@ -21,8 +25,26 @@ impl Drop for Backend {
     }
 }
 
+/// Brings the main window back from the tray (or from behind other windows).
+fn show_main(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 fn main() {
     let result = tauri::Builder::default()
+        // A second launch (e.g. from the Start menu while the app sits in the tray) only reopens the window.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
+        // Closing the window keeps Mark & Listen running in the tray; "종료" in the tray menu quits.
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let _ = window.hide();
+                api.prevent_close();
+            }
+        })
         .setup(|app| {
             let resources = app.path().resource_dir()?;
             let runtime = resources.join("runtime/node.exe");
@@ -68,6 +90,28 @@ fn main() {
                 .build()
                 .map_err(|err| io::Error::other(format!("Could not open the WebView2 window: {err}")))?;
             app.manage(backend);
+
+            let open = MenuItem::with_id(app, "open", "Mark & Listen 열기", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&open, &quit])?;
+            let mut tray = TrayIconBuilder::with_id("main")
+                .tooltip("Mark & Listen")
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    "open" => show_main(app),
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                        show_main(tray.app_handle());
+                    }
+                });
+            if let Some(icon) = app.default_window_icon() {
+                tray = tray.icon(icon.clone());
+            }
+            tray.build(app)?;
             Ok(())
         })
         .build(tauri::generate_context!());

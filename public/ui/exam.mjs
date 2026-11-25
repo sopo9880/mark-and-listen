@@ -298,7 +298,7 @@ export async function render(page, { params, go }) {
       status.className = "audio-status";
       return;
     }
-    paper.querySelector(`.q-group[data-group="${seg.groupId}"]`)?.classList.add("playing");
+    if (seg.groupId) paper.querySelector(`.q-group[data-group="${seg.groupId}"]`)?.classList.add("playing");
     if (played !== seg.id) {
       played = seg.id;
       audio.src = seg.audio;
@@ -316,7 +316,10 @@ export async function render(page, { params, go }) {
     status.replaceChildren(
       h("span", { class: "pulse" }),
       h("span", {
-        text: `재생 중 · ${partLabel(e, e.groups.find((g) => g.id === seg.groupId)?.part)} · ${seg.speaker === "narrator" ? "내레이션" : "화자 " + seg.speaker}`,
+        text:
+          seg.kind === "direction"
+            ? "재생 중 · 안내 방송"
+            : `재생 중 · ${partLabel(e, e.groups.find((g) => g.id === seg.groupId)?.part)} · ${seg.speaker === "narrator" ? "내레이션" : "화자 " + seg.speaker}`,
       }),
     );
     status.className = "audio-status live";

@@ -8,137 +8,23 @@ export async function render(page, { go }) {
   state.settings = settings;
   let disposeUrl = () => {};
 
-  // ── Question generation ────────────────────────────────────────────────
-  let textProvider = settings.textProvider;
-  const textModel = h("input", {
-    class: "input",
-    type: "text",
-    value: settings.textModel,
-    placeholder: "비우면 공급자 기본 모델",
+  // ── Question generation & photo questions ───────────────────────────
+  const generation = engineCard(settings, {
+    iconName: "sparkle",
+    title: "문항 생성 엔진",
+    desc: "모든 시험관의 AI 출제와 내부 정답 검증에 사용합니다. 다른 엔진으로 자동 전환하지 않습니다.",
+    providerKey: "textProvider",
+    modelKey: "textModel",
+    saved: "문항 생성 설정을 저장했습니다.",
   });
-  const textKey = h("input", {
-    class: "input",
-    type: "password",
-    autocomplete: "off",
-    spellcheck: false,
-    placeholder: settings.keys[textProvider] ? "연결됨 · 바꾸려면 새 키 입력" : "API 키",
+  const vision = engineCard(settings, {
+    iconName: "eye",
+    title: "사진 문항 엔진",
+    desc: "앱에 내장된 Part 1 사진을 직접 보고 문항을 만든 뒤, 별도 호출로 정답 유일성·모호함·장면 중복을 검사합니다. 이미지 입력을 지원하는 모델을 고르세요.",
+    providerKey: "visionProvider",
+    modelKey: "visionModel",
+    saved: "사진 문항 엔진을 저장했습니다.",
   });
-  const textKeyField = field("API 키 · 앱 실행 중 메모리에만 보관", textKey);
-  const syncText = () => {
-    textKeyField.hidden = textProvider === "codex";
-    textModel.closest(".field").hidden = textProvider === "codex";
-    textKey.placeholder = settings.keys[textProvider] ? "연결됨 · 바꾸려면 새 키 입력" : "API 키";
-  };
-  const generation = card(
-    {},
-    head(
-      "sparkle",
-      "문항 생성 엔진",
-      "모든 시험관의 AI 출제에 사용합니다. 다른 엔진으로 자동 전환하지 않습니다.",
-    ),
-    field(
-      "기본 엔진",
-      segmented(
-        [
-          ["codex", "Codex · ChatGPT 로그인"],
-          ["openai", "GPT API"],
-          ["gemini", "Gemini API"],
-        ],
-        textProvider,
-        (v) => ((textProvider = v), syncText()),
-      ),
-    ),
-    field("모델 ID", textModel),
-    textKeyField,
-    h(
-      "div",
-      { class: "row end" },
-      button(
-        "저장",
-        async () => {
-          if (textProvider !== "codex" && textKey.value) {
-            await api("settings", { keyProvider: textProvider, apiKey: textKey.value });
-            settings.keys[textProvider] = true;
-            textKey.value = "";
-          }
-          await api("settings", {
-            textProvider,
-            textModel: textProvider === "codex" ? "" : textModel.value.trim(),
-          });
-          await loadConnections();
-          syncText();
-          toast("문항 생성 설정을 저장했습니다.", "ok");
-        },
-        { kind: "primary" },
-      ),
-    ),
-  );
-
-  // ── Photo questions (vision) ───────────────────────────────────────────
-  let visionProvider = settings.visionProvider ?? "codex";
-  const visionModel = h("input", {
-    class: "input",
-    type: "text",
-    value: settings.visionModel ?? "",
-    placeholder: "비우면 공급자 기본 모델",
-  });
-  const visionModelField = field("모델 ID · 이미지 입력 지원 모델", visionModel);
-  const visionKey = h("input", { class: "input", type: "password", autocomplete: "off", spellcheck: false });
-  const visionKeyField = field("API 키 · 메모리에만 보관", visionKey);
-  const syncVision = () => {
-    visionKeyField.hidden = visionModelField.hidden = visionProvider === "codex";
-    visionKey.placeholder = settings.keys[visionProvider] ? "연결됨 · 바꾸려면 새 키 입력" : "API 키";
-  };
-  const vision = card(
-    {},
-    head(
-      "eye",
-      "사진 문항 엔진",
-      "앱에 내장된 Part 1 사진을 직접 보고 문항을 만든 뒤, 별도 호출로 정답 유일성·모호함·장면 중복을 검사합니다. 문항을 만들 때 사진이 이 엔진으로 전송됩니다.",
-    ),
-    field(
-      "이미지 입력 엔진",
-      segmented(
-        [
-          ["codex", "Codex · ChatGPT 로그인"],
-          ["openai", "GPT API"],
-          ["gemini", "Gemini API"],
-        ],
-        visionProvider,
-        (v) => ((visionProvider = v), syncVision()),
-      ),
-    ),
-    visionModelField,
-    visionKeyField,
-    h(
-      "div",
-      { class: "row end" },
-      h(
-        "a",
-        { class: "btn btn-ghost", href: "#/photos" },
-        icon("halls", 16),
-        h("span", { text: "사진 보관함" }),
-      ),
-      button(
-        "저장",
-        async () => {
-          if (visionProvider !== "codex" && visionKey.value) {
-            await api("settings", { keyProvider: visionProvider, apiKey: visionKey.value });
-            settings.keys[visionProvider] = true;
-            visionKey.value = "";
-          }
-          await api("settings", {
-            visionProvider,
-            visionModel: visionProvider === "codex" ? "" : visionModel.value.trim(),
-          });
-          await loadConnections();
-          syncVision();
-          toast("사진 문항 엔진을 저장했습니다.", "ok");
-        },
-        { kind: "primary" },
-      ),
-    ),
-  );
 
   // ── Codex ──────────────────────────────────────────────────────────────
   const auto = h("input", {
@@ -220,6 +106,13 @@ export async function render(page, { go }) {
 
   // ── Live narration ────────────────────────────────────────────────────
   let liveProvider = settings.liveProvider;
+  const sttModel = h("input", {
+    class: "input",
+    type: "text",
+    value: settings.sttModel ?? "",
+    maxLength: 160,
+    placeholder: "자동",
+  });
   const liveKey = h("input", { class: "input", type: "password", autocomplete: "off", spellcheck: false });
   const model = select(
     [[settings.liveModel || "", settings.liveModel || "모델 목록을 새로고침하세요"]],
@@ -235,7 +128,9 @@ export async function render(page, { go }) {
   );
   const sample = h("div", { class: "stack" });
   const keyHint = () =>
-    (liveKey.placeholder = settings.keys[liveProvider] ? "연결됨 · 바꾸려면 새 키 입력" : "API 키");
+    (liveKey.placeholder = settings.keys[liveProvider]
+      ? "저장된 키 사용 중 · 바꾸려면 새 키 입력"
+      : "API 키");
   keyHint();
   const refreshModels = async () => {
     if (liveKey.value) {
@@ -278,7 +173,7 @@ export async function render(page, { go }) {
     h(
       "div",
       { class: "grid-2" },
-      field("API 키 · 메모리에만 보관", liveKey),
+      field("API 키 · 이 PC에 암호화해 저장", liveKey),
       h(
         "div",
         { class: "field" },
@@ -287,6 +182,11 @@ export async function render(page, { go }) {
       ),
     ),
     h("div", { class: "grid-2" }, field("Live 오디오 모델", model), field("낭독 테스트 대본", script)),
+    field(
+      "전사 검증 모델 · 비우면 자동",
+      sttModel,
+      "저장된 음원을 이 모델로 다시 받아써서 대본과 비교합니다. Gemini는 최신 Flash, OpenAI는 gpt-transcribe가 기본입니다.",
+    ),
     h(
       "div",
       { class: "row" },
@@ -294,7 +194,7 @@ export async function render(page, { go }) {
         "선택 저장",
         async () => {
           if (!model.value) throw Error("모델을 선택하세요.");
-          await api("settings", { liveProvider, liveModel: model.value });
+          await api("settings", { liveProvider, liveModel: model.value, sttModel: sttModel.value.trim() });
           settings.liveModel = model.value;
           toast("Live 모델을 저장했습니다. 기존 음원은 유지됩니다.", "ok");
         },
@@ -315,6 +215,10 @@ export async function render(page, { go }) {
             sample.replaceChildren(
               h("audio", { controls: true, src: url }),
               diffView({ exact: true, ops: null, labels: null }, r.transcript),
+              h("small", {
+                class: "muted",
+                text: "위 전사는 저장된 음원을 별도 모델로 다시 받아쓴 결과입니다.",
+              }),
             );
           } catch (error) {
             sample.replaceChildren(
@@ -329,14 +233,18 @@ export async function render(page, { go }) {
     sample,
     h("p", {
       class: "muted small",
-      text: "무료 제공 여부는 계정 할당량에 따르며 유료 공급자로 자동 전환하지 않습니다. 숫자·가격·시각은 단어 표기와 숫자 표기를 같은 것으로 비교하고, 선택지 기호(A–D)는 전사가 빠지거나 ‘see’처럼 적혀도 통과로 봅니다.",
+      text: "무료 제공 여부는 계정 할당량에 따르며 유료 공급자로 자동 전환하지 않습니다. 낭독마다 길이가 대본에 맞는지 확인하고, 저장된 음원을 별도 모델로 받아써 대본과 단어 단위로 비교합니다. 숫자·가격·시각의 표기 차이와 선택지 기호(A–D)의 동음어는 같은 것으로 봅니다. 목소리는 문항·대화마다 바뀝니다.",
     }),
   );
 
   // ── Connections, updates, info ─────────────────────────────────────────
   const checks = card(
     {},
-    head("refresh", "연결 상태 확인", "키와 로그인이 실제로 동작하는지 확인합니다."),
+    head(
+      "refresh",
+      "연결 상태 확인",
+      "앱을 켤 때, 키를 저장할 때, 그리고 10분마다 자동으로 확인합니다. 지금 바로 확인하려면 누르세요.",
+    ),
     h(
       "div",
       { class: "row" },
@@ -435,12 +343,10 @@ export async function render(page, { go }) {
     h(
       "div",
       { class: "settings-grid" },
-      h("div", { class: "stack" }, generation, vision, codex, checks),
+      h("div", { class: "stack" }, generation.card, vision.card, codex, checks),
       h("div", { class: "stack" }, appearance, live, update, about),
     ),
   );
-  syncText();
-  syncVision();
   return () => disposeUrl();
 }
 
@@ -451,4 +357,129 @@ function head(ic, title, sub) {
     h("h2", {}, icon(ic, 18), " ", title),
     sub ? h("small", { class: "muted", text: sub }) : null,
   );
+}
+
+/** Engine picker shared by question generation and photo questions: provider, model list or free entry, saved key. */
+function engineCard(settings, { iconName, title, desc, providerKey, modelKey, saved }) {
+  let provider = settings[providerKey] ?? "codex";
+  let current = settings[modelKey] ?? "";
+  const keyInput = h("input", { class: "input", type: "password", autocomplete: "off", spellcheck: false });
+  const keyBox = h("div", { class: "stack" });
+  const modelBox = h("div", { class: "stack" });
+  const manual = h("input", { class: "input", type: "text", value: current, maxLength: 160 });
+  let list = select([["", "공급자 기본 모델"]], "");
+  let models = [];
+
+  const keyField = () => {
+    const has = settings.keys[provider];
+    keyInput.placeholder = has ? "저장된 키 사용 중 · 바꾸려면 새 키 입력" : "API 키";
+    keyBox.replaceChildren(
+      field("API 키 · 이 PC에 암호화해 저장", keyInput, "앱을 껐다 켜거나 업데이트해도 유지됩니다."),
+      has
+        ? h(
+            "div",
+            { class: "row" },
+            button(
+              "저장된 키 삭제",
+              async () => {
+                await api("settings", { keyProvider: provider, apiKey: "" });
+                settings.keys[provider] = false;
+                await loadConnections();
+                sync();
+              },
+              { small: true, kind: "ghost", iconName: "trash" },
+            ),
+          )
+        : null,
+    );
+  };
+  const loadModels = async () => {
+    models = (await api("text-models", { provider })).models;
+    sync();
+  };
+  const sync = () => {
+    keyBox.hidden = provider === "codex";
+    if (provider !== "codex") keyField();
+    if (provider === "codex") {
+      manual.placeholder = "비우면 Codex 기본 모델 (예: gpt-5.5)";
+      modelBox.replaceChildren(field("Codex 모델", manual, "Codex CLI의 --model 값으로 전달됩니다."));
+      return;
+    }
+    const known = models.some((m) => m.id === current);
+    list = select(
+      [
+        ["", "공급자 기본 모델"],
+        ...models.map((m) => [m.id, m.label === m.id ? m.id : `${m.label} · ${m.id}`]),
+        ["__manual", "직접 입력…"],
+      ],
+      known ? current : current ? "__manual" : "",
+      { onchange: () => sync2() },
+    );
+    const sync2 = () => {
+      manualField.hidden = list.value !== "__manual";
+    };
+    manual.placeholder = "모델 ID";
+    const manualField = field("모델 ID 직접 입력", manual);
+    modelBox.replaceChildren(
+      h(
+        "div",
+        { class: "model-row" },
+        field(models.length ? `모델 (${models.length}개)` : "모델", list),
+        button("목록 불러오기", loadModels, { iconName: "refresh", disabled: !settings.keys[provider] }),
+      ),
+      manualField,
+    );
+    sync2();
+  };
+  const cardEl = card(
+    {},
+    head(iconName, title, desc),
+    field(
+      "엔진",
+      segmented(
+        [
+          ["codex", "Codex · ChatGPT 로그인"],
+          ["openai", "GPT API"],
+          ["gemini", "Gemini API"],
+        ],
+        provider,
+        (v) => {
+          provider = v;
+          current = "";
+          manual.value = "";
+          models = [];
+          sync();
+          if (provider !== "codex" && settings.keys[provider]) loadModels().catch(() => {});
+        },
+      ),
+    ),
+    keyBox,
+    modelBox,
+    h(
+      "div",
+      { class: "row end" },
+      button(
+        "저장",
+        async () => {
+          if (provider !== "codex" && keyInput.value) {
+            await api("settings", { keyProvider: provider, apiKey: keyInput.value });
+            settings.keys[provider] = true;
+            keyInput.value = "";
+          }
+          const model = provider === "codex" || list.value === "__manual" ? manual.value.trim() : list.value;
+          await api("settings", { [providerKey]: provider, [modelKey]: model });
+          settings[providerKey] = provider;
+          settings[modelKey] = current = model;
+          await loadConnections();
+          sync();
+          if (provider !== "codex" && !models.length) loadModels().catch(() => {});
+          toast(saved, "ok");
+        },
+        { kind: "primary" },
+      ),
+    ),
+  );
+  sync();
+  if (provider !== "codex" && settings.keys[provider]) loadModels().catch(() => {});
+  return { card: cardEl };
 }

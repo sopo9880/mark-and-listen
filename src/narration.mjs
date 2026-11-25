@@ -335,16 +335,44 @@ export function transcriptDiff(expected, actual) {
   };
 }
 
-export async function verifiedNarration(speak, args) {
+const wavSeconds = (wav) =>
+  Buffer.isBuffer(wav) && wav.length > 44 ? (wav.length - 44) / (wav.readUInt32LE(28) || 48000) : 0;
+
+/**
+ * Narrates `args.prompt` up to three times until the saved audio matches the script.
+ * With `check.transcribe`, the comparison uses an independent transcription of the WAV bytes (not the Live
+ * session's own transcript), and `check.duration` first rejects clips whose length cannot hold the script.
+ */
+export async function verifiedNarration(speak, args, check = {}) {
   let last;
   for (let attempt = 0; attempt < 3; attempt++) {
     args.signal?.throwIfAborted();
     const take = await speak(args);
-    const diff = transcriptDiff(args.prompt, take.transcript);
-    if (diff.exact) return { ...take, diff, attempts: attempt + 1 };
-    last = { transcript: take.transcript, diff };
+    if (check.duration) {
+      const { plausibleDuration } = await import("./stt.mjs");
+      const fit = plausibleDuration(args.prompt, wavSeconds(take.wav));
+      if (!fit.ok) {
+        last = {
+          transcript: take.transcript,
+          diff: { exact: false, missing: [], added: [], ops: [], reason: fit.reason },
+        };
+        continue;
+      }
+    }
+    const transcript = check.transcribe ? await check.transcribe(take.wav) : take.transcript;
+    const diff = transcriptDiff(args.prompt, transcript);
+    if (diff.exact)
+      return {
+        ...take,
+        transcript,
+        liveTranscript: take.transcript,
+        diff,
+        attempts: attempt + 1,
+        sttChecked: !!check.transcribe,
+      };
+    last = { transcript, diff };
   }
-  throw Object.assign(Error("대본과 전사가 세 번 일치하지 않았습니다. 해당 구간만 다시 생성하세요."), {
+  throw Object.assign(Error("대본과 실제 음원이 세 번 일치하지 않았습니다. 해당 구간만 다시 생성하세요."), {
     code: "NARRATION_MISMATCH",
     last,
   });

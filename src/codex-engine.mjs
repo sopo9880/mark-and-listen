@@ -42,7 +42,14 @@ function run(executable, args, { cwd, stdin, signal } = {}) {
   });
 }
 
-export async function generateWithCodex({ executable, prompt, images = [], signal, runCommand = run }) {
+export async function generateWithCodex({
+  executable,
+  prompt,
+  model,
+  images = [],
+  signal,
+  runCommand = run,
+}) {
   let scratch;
   try {
     scratch = await mkdtemp(join(tmpdir(), "mark-listen-codex-"));
@@ -66,6 +73,10 @@ export async function generateWithCodex({ executable, prompt, images = [], signa
       'model_provider="openai"',
       "--json",
     ];
+    if (model) {
+      if (!/^[a-zA-Z0-9_.:-]{1,80}$/.test(model)) throw Error("Codex 모델 이름을 확인하세요.");
+      args.push("--model", model);
+    }
     // Photos are attached as files in the private scratch folder (codex exec --image).
     for (const [i, bytes] of images.entries()) {
       const file = join(scratch, `photo-${i + 1}.jpg`);

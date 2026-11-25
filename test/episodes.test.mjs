@@ -176,7 +176,7 @@ test("server preserves success after quota, retries only failed segment, never m
   const mock = async ({ prompt, provider, voice }) => {
     assert.equal(offline, false);
     assert.equal(provider, "gemini");
-    assert.equal(voice, "Kore");
+    assert.ok(["Kore", "Aoede", "Leda", "Zephyr", "Puck", "Charon", "Orus", "Fenrir"].includes(voice));
     calls++;
     if (fail) throw Object.assign(Error("SECRET-MUST-NOT-LEAK"), { status: 429 });
     return { wav: wav(), transcript: prompt };
@@ -227,7 +227,7 @@ test("server preserves success after quota, retries only failed segment, never m
   let saved = await store.read(e.id);
   assert.equal(saved.groups[0].segments[0].status, "ready");
   assert.equal(saved.groups[1].segments[0].status, "pending");
-  // Reopen process: successful fragments survive, volatile API credentials do not.
+  // Reopen process: successful fragments and saved API keys survive.
   server.closeAllConnections();
   await new Promise((r) => server.close(r));
   fail = false;
@@ -252,8 +252,9 @@ test("server preserves success after quota, retries only failed segment, never m
     });
     return r.json();
   };
+  // API keys persist across restarts (DPAPI-encrypted on Windows).
   const prefs = await (await fetch(base + "/api/settings")).json();
-  assert.equal(prefs.keys.gemini, false);
+  assert.equal(prefs.keys.gemini, true);
   await p2("settings", { keyProvider: "gemini", apiKey: "MOCK-KEY" });
   await p2("models", { provider: "gemini" });
   for (let i = 0; i < 3; i++) await p2("produce", { id: e.id });

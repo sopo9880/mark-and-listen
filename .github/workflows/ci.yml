@@ -47,6 +47,8 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           npm ci
+          # Saved API keys are DPAPI-encrypted through PowerShell; prove the round trip on a real Windows runner.
+          node -e "import('./src/secrets.mjs').then(async (m) => { const s = m.createSecretStore(process.env.RUNNER_TEMP + '/keys.json'); await s.save({ gemini: 'AIza-ci-roundtrip-1' }); const k = await s.load(); if (k.gemini !== 'AIza-ci-roundtrip-1') { console.error('DPAPI round trip failed'); process.exit(1); } console.log('DPAPI key storage ok'); })"
           ./scripts/prepare-windows.ps1
           rustup target add x86_64-pc-windows-msvc
           npm run build:windows

@@ -24,6 +24,18 @@
 - **오답 노트** — 모든 회차의 최근 응시에서 틀리거나 비운 문항을 모아 다시 풀고 ‘익혔어요’로 정리
 - **설정** — 문항 생성 엔진(Codex · GPT API · Gemini API), Live 낭독 모델과 테스트, Codex 엔진 관리, 서명된 앱 업데이트
 
+## 안내 방송 음원
+
+전체 LC(100문항) 회차에는 Listening 시작 안내, Part 1–4 디렉션, 문항 번호, “Questions … refer to the following …”, 종료 안내가 고정 목소리로 들어갑니다. 이 음원은 회차마다 만들지 않고 한 번만 생성해 `assets/directions`에 번들합니다.
+
+```powershell
+py -m pip install google-genai
+$env:GEMINI_API_KEY = "…"
+py tools\make_directions.py --out directions     # 129개 클립, 길이·전사 검증 후 저장, 다시 실행하면 이어서 생성
+```
+
+문구는 Mark & Listen 자체 문안입니다(ETS 공식 디렉션 문구를 쓰지 않음).
+
 ## 디자인
 
 화면은 [Lucian UX/UI Prompt](https://lucianlabs.dev/uxui-prompt/)(MIT)의 테마 토큰과 요소를 바탕으로 합니다. `public/lucian.css`에 토큰·베이스와 요소 CSS를 원본 그대로 두고, 강조색만 로고의 그린·라임으로 매핑했습니다. 다크 모드는 시스템 설정을 따르며 설정 → 화면 테마에서 바꿀 수 있습니다.

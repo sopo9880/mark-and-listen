@@ -8,8 +8,11 @@ export function startAttempt(e, now = Date.now()) {
   const durations = phaseDurations(e);
   const audioSection = Object.entries(examOf(e).sections).find(([, s]) => s.audio)?.[0];
   const timeline = audioTimeline(e);
-  if (audioSection && timeline.at(-1)?.end > durations[audioSection] / 1000)
-    throw Error("음원이 듣기 제한 시간을 넘습니다. 대본과 음원을 검토하세요.");
+  // Like the real test, the listening section lasts at least as long as its audio and answer time.
+  if (audioSection && timeline.length) {
+    const needed = Math.ceil(timeline.at(-1).end + 8) * 1000;
+    if (needed > durations[audioSection]) durations[audioSection] = needed;
+  }
   const order = sectionIds(e).filter((id) => durations[id] > 0);
   const phase = order[0];
   return {

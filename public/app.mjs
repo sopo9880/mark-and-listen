@@ -156,7 +156,9 @@ try {
     "v" + session.build + (session.testMode ? " · 테스트 모드" : " · Beta");
   document.body.classList.toggle("test-mode", !!session.testMode);
   await route();
+  // The server checks connections by itself (start-up, key changes, every 10 minutes); keep the sidebar current.
   loadConnections().catch(() => {});
+  setInterval(() => loadConnections().catch(() => {}), 15000);
   if (session.smoke)
     await (await import("./ui/api.mjs")).api("smoke", { uiReady: !!main.querySelector(".hero h1") });
 } catch (error) {
