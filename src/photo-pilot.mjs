@@ -51,6 +51,25 @@ export async function attachPhotos(store, episode, photos) {
   }
   return store.write(episode);
 }
+/** Copies library photos into the episode folder for its Part 1 groups (the episode keeps its own copy). */
+export async function attachLibraryPhotos(store, episode, picks) {
+  const groups = episode.groups.filter((g) => g.part === 1);
+  if (picks.length !== groups.length) throw Error("Part 1 사진 수가 맞지 않습니다.");
+  await mkdir(join(store.root, episode.id), { recursive: true, mode: 0o700 });
+  for (const [index, group] of groups.entries()) {
+    const { bytes, name } = picks[index];
+    await writeFile(photoPath(store.root, episode.id, group.id), bytes, { mode: 0o600 });
+    group.image = `/api/photo/${episode.id}/${group.id}`;
+    group.imageAlt = "Part 1 시험 사진";
+    group.photoName = name;
+    group.photoHash = createHash("sha256").update(bytes).digest("hex");
+  }
+  episode.photoPart1 = true;
+  return store.write(episode);
+}
+
+export const usesPhoto = (episode, group) => !!group.photoHash && (episode.photoPilot || episode.photoPart1);
+
 export async function checkedPhoto(store, id, group) {
   const bytes = await readFile(photoPath(store.root, id, group.id));
   if (createHash("sha256").update(bytes).digest("hex") !== group.photoHash)
@@ -87,7 +106,7 @@ export async function createPhotoQuestion({ store, episode, group, modelCall }) 
     new Set(choices.map((c) => c.trim().toLowerCase())).size !== 4
   )
     throw Error("사진 문항 형식 검증 실패");
-  const prior = episode.groups.filter((g) => g.id !== group.id && g.status === "ready");
+  const prior = episode.groups.filter((g) => g.id !== group.id && g.status === "ready" && g.photoHash);
   const earlier = await Promise.all(prior.map((g) => checkedPhoto(store, episode.id, g)));
   const review = json(
     await modelCall({

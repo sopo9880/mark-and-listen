@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -42,7 +42,7 @@ function run(executable, args, { cwd, stdin, signal } = {}) {
   });
 }
 
-export async function generateWithCodex({ executable, prompt, signal, runCommand = run }) {
+export async function generateWithCodex({ executable, prompt, images = [], signal, runCommand = run }) {
   let scratch;
   try {
     scratch = await mkdtemp(join(tmpdir(), "mark-listen-codex-"));
@@ -65,8 +65,14 @@ export async function generateWithCodex({ executable, prompt, signal, runCommand
       "-c",
       'model_provider="openai"',
       "--json",
-      "-",
     ];
+    // Photos are attached as files in the private scratch folder (codex exec --image).
+    for (const [i, bytes] of images.entries()) {
+      const file = join(scratch, `photo-${i + 1}.jpg`);
+      await writeFile(file, bytes, { mode: 0o600 });
+      args.push("--image", file);
+    }
+    args.push("-");
     const result = await runCommand(executable, args, { cwd: scratch, stdin: prompt, signal });
     if (result.code !== 0)
       throw Error("Codex가 생성을 완료하지 못했어요. 로그인과 사용량, 설치 버전을 확인해 주세요.");

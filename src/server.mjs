@@ -1,6 +1,13 @@
 import { APP_VERSION, createAppUpdater } from "./app-update.mjs";
 import { UPDATE_PUBLIC_KEY } from "./update-trust.mjs";
-import { attachPhotos, checkedPhoto, createPhotoQuestion, decodePack, photoPath } from "./photo-pilot.mjs";
+import {
+  attachPhotos,
+  attachLibraryPhotos,
+  createPhotoQuestion,
+  decodePack,
+  photoPath,
+} from "./photo-pilot.mjs";
+import { PhotoLibrary } from "./photo-library.mjs";
 import { verifiedNarration } from "./narration.mjs";
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
@@ -56,6 +63,13 @@ export async function buildServer({
   const appUpdate = createAppUpdater({ publicKey: UPDATE_PUBLIC_KEY });
   let appUpdating = false;
   const store = await new EpisodeStore(join(root, "episodes")).init();
+  const photos = new PhotoLibrary(join(root, "photos"));
+  const photoUsage = async () => {
+    const usage = new Map();
+    for (const e of await store.list())
+      for (const g of e.groups) if (g.photoHash) usage.set(g.photoHash, (usage.get(g.photoHash) ?? 0) + 1);
+    return usage;
+  };
   updater ??= createCodexUpdater({ root: join(root, "codex") });
   let settings = {
     autoUpdate: true,
@@ -63,6 +77,8 @@ export async function buildServer({
     liveModel: "",
     textProvider: "codex",
     textModel: "",
+    visionProvider: "codex",
+    visionModel: "",
   };
   try {
     settings = { ...settings, ...JSON.parse(await readFile(join(root, "settings.json"), "utf8")) };
@@ -199,6 +215,17 @@ export async function buildServer({
         send(res, { uiReady });
         return;
       }
+      if (req.method === "GET" && path === "/api/photos") {
+        const usage = await photoUsage();
+        send(res, { photos: (await photos.list()).map((p) => ({ ...p, used: usage.get(p.sha256) ?? 0 })) });
+        return;
+      }
+      const libraryPhoto = /^\/api\/photos\/([0-9a-f]{64})\.jpg$/.exec(path);
+      if (libraryPhoto && ["GET", "HEAD"].includes(req.method)) {
+        res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+        await stream(req, res, photos.file(libraryPhoto[1]), "image/jpeg");
+        return;
+      }
       if (req.method === "GET" && path === "/api/notebook") {
         const { mastered } = await readNotebook();
         send(res, { entries: notebookEntries(await store.list(), mastered) });
@@ -257,13 +284,13 @@ export async function buildServer({
             connections[b.keyProvider] = "unverified";
             modelCache.delete(b.keyProvider);
           }
-          for (const k of ["liveProvider", "textProvider"])
+          for (const k of ["liveProvider", "textProvider", "visionProvider"])
             if (b[k] !== undefined) {
               const allowed = k === "liveProvider" ? ["gemini", "openai"] : ["codex", "gemini", "openai"];
               if (!allowed.includes(b[k])) throw fail(400, "공급자 오류");
               settings[k] = b[k];
             }
-          for (const k of ["liveModel", "textModel"])
+          for (const k of ["liveModel", "textModel", "visionModel"])
             if (b[k] !== undefined) {
               if (typeof b[k] !== "string" || b[k].length > 160 || !/^[a-zA-Z0-9_.:-]*$/.test(b[k]))
                 throw fail(400, "모델 ID 오류");
@@ -375,9 +402,67 @@ export async function buildServer({
           send(res, await attachPhotos(store, episode, photos));
           return;
         }
-        if (path === "/api/episodes") {
+        if (path === "/api/photos/import") {
           try {
-            send(res, await store.create(b));
+            send(res, await photos.import(b.items));
+          } catch (e) {
+            throw fail(400, e.message);
+          }
+          return;
+        }
+        if (path === "/api/photos/delete") {
+          send(res, await photos.remove((b.shas ?? []).filter((x) => /^[0-9a-f]{64}$/.test(x))));
+          return;
+        }
+        if (path === "/api/episodes/swap-photo") {
+          if (busy) throw fail(409, "제작 작업이 끝난 뒤 교체하세요.");
+          const e = await store.read(b.id);
+          if (e.attempts.length) throw fail(409, "응시한 회차는 변경할 수 없습니다.");
+          const g = e.groups.find((x) => x.id === b.groupId && x.photoHash);
+          if (!g || !e.photoPart1) throw fail(400, "보관함 사진을 쓰는 Part 1 문항이 아닙니다.");
+          const library = await photos.list();
+          const avoid = e.groups
+            .filter((x) => x.photoHash)
+            .map(
+              (x) =>
+                library.find((p) => p.sha256 === x.photoHash) ?? {
+                  sha256: x.photoHash,
+                  name: x.photoName ?? "",
+                },
+            );
+          let next;
+          try {
+            [next] = await photos.pick(1, await photoUsage(), Math.random, avoid);
+          } catch (err) {
+            throw fail(400, err.message);
+          }
+          const bytes = await photos.read(next.sha256);
+          await writeFile(photoPath(store.root, e.id, g.id), bytes, { mode: 0o600 });
+          Object.assign(g, {
+            photoHash: next.sha256,
+            photoName: next.name,
+            status: "pending",
+            reviewed: false,
+            questions: [],
+            segments: [],
+            error: null,
+          });
+          send(res, await store.write(e));
+          return;
+        }
+        if (path === "/api/episodes") {
+          let picks = null;
+          const wantsPhotos =
+            b.part1 === "photos" && (b.exam ?? "toeic") === "toeic" && Number(b.counts?.[1]) > 0;
+          try {
+            if (wantsPhotos && b.fixed !== true) {
+              const chosen = await photos.pick(Number(b.counts[1]), await photoUsage());
+              picks = await Promise.all(
+                chosen.map(async (p) => ({ name: p.name, bytes: await photos.read(p.sha256) })),
+              );
+            }
+            const e = await store.create(b);
+            send(res, picks ? await attachLibraryPhotos(store, e, picks) : e);
           } catch (e) {
             throw fail(400, e.message);
           }
@@ -485,10 +570,19 @@ export async function buildServer({
             if (g) {
               try {
                 const provider = settings.textProvider;
-                if (e.photoPilot) {
-                  const { provider, model } = e.photoPilot;
-                  if (!getKey(provider))
-                    throw fail(400, "설정에서 이미지 공급자의 API 키를 다시 연결하세요.");
+                if (g.photoHash) {
+                  // Photo questions never fall back to the bundled illustrations.
+                  const vision = e.photoPilot ?? {
+                    provider: settings.visionProvider,
+                    model: settings.visionModel,
+                  };
+                  if (vision.provider !== "codex" && !getKey(vision.provider))
+                    throw fail(
+                      400,
+                      "설정에서 사진 문항 엔진(이미지 입력)의 API 키를 연결하세요. 사진 회차는 삽화로 대체하지 않습니다.",
+                    );
+                  const executable =
+                    vision.provider === "codex" ? ((await updater.executable()) ?? "codex") : null;
                   Object.assign(
                     g,
                     await createPhotoQuestion({
@@ -496,7 +590,16 @@ export async function buildServer({
                       episode: e,
                       group: g,
                       modelCall: ({ images, prompt }) =>
-                        generate({ provider, model, images, prompt, apiKey: getKey(provider), signal }),
+                        vision.provider === "codex"
+                          ? codex({ executable, prompt, images, signal })
+                          : generate({
+                              provider: vision.provider,
+                              model: vision.model || undefined,
+                              images,
+                              prompt,
+                              apiKey: getKey(vision.provider),
+                              signal,
+                            }),
                     }),
                   );
                 } else if (e.fixed || b.fixed === true) {
@@ -521,7 +624,7 @@ export async function buildServer({
                 g.error =
                   err.status === 400
                     ? err.message
-                    : e.photoPilot
+                    : g.photoHash
                       ? "사진 문항 생성 또는 독립 검증 실패. 이미지 입력 모델·키·할당량과 사진의 명확성 및 중복 여부를 확인하세요."
                       : "문항 생성 또는 검증 실패. 엔진·로그인·모델 설정을 확인하고 재시도하세요.";
                 await store.write(e);

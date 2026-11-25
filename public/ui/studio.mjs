@@ -76,6 +76,7 @@ export async function render(page, { params, go }) {
             chip(STAGE_LABEL[p.stage], STAGE_KIND[p.stage]),
             e.fixed ? chip("고정 대본", "info") : null,
             e.photoPilot ? chip("사진 파일럿", "info") : null,
+            e.photoPart1 ? chip("Part 1 실사진", "info") : null,
           ),
         ),
         h(
@@ -364,6 +365,27 @@ export async function render(page, { params, go }) {
     if (g.image || g.graphic)
       body.append(
         h("img", { class: "figure", src: g.image || g.graphic, alt: g.imageAlt || g.graphicAlt || "" }),
+        g.photoName
+          ? h(
+              "div",
+              { class: "row" },
+              h("small", { class: "muted", text: "보관함 사진 · " + g.photoName }),
+              e.photoPart1 && !e.attempts.length
+                ? button(
+                    "다른 사진으로 교체",
+                    async () => {
+                      const ok = await confirmDialog({
+                        title: "이 문항의 사진을 바꿀까요?",
+                        body: "보관함에서 이 회차와 겹치지 않는 사진을 골라 넣고, 이 문항과 음원은 다시 생성합니다.",
+                        confirm: "교체",
+                      });
+                      if (ok) replaceEpisode(await api("episodes/swap-photo", { id, groupId: g.id }));
+                    },
+                    { small: true, iconName: "refresh", kind: "ghost", disabled: production.running },
+                  )
+                : null,
+            )
+          : null,
       );
     for (const p of g.passages ?? [])
       body.append(h("div", { class: "passage" }, h("h4", { text: p.title }), h("p", { text: p.body })));

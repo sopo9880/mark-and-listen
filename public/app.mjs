@@ -8,6 +8,7 @@ import * as exam from "./ui/exam.mjs";
 import * as review from "./ui/review.mjs";
 import * as notebook from "./ui/notebook.mjs";
 import * as settings from "./ui/settings.mjs";
+import * as photos from "./ui/photos.mjs";
 
 const NAV = [
   ["home", "홈", "home"],
@@ -26,6 +27,7 @@ const ROUTES = [
   [/^review\/([\w-]+)\/([\w-]+)$/, review, "library"],
   [/^notebook$/, notebook, "notebook"],
   [/^settings$/, settings, "settings"],
+  [/^photos$/, photos, "halls"],
 ];
 
 const main = document.getElementById("main");

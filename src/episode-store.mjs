@@ -162,7 +162,7 @@ export class EpisodeStore {
   async begin(id) {
     return this.locked(async () => {
       const e = await this.read(id);
-      if (e.photoPilot) for (const group of e.groups) await checkedPhoto(this, e.id, group);
+      for (const group of e.groups) if (group.photoHash) await checkedPhoto(this, e.id, group);
       await this.verifyAudio(e);
       const unfinished = e.attempts.find((a) => advanceAttempt(a).phase !== "done");
       if (unfinished) return unfinished;

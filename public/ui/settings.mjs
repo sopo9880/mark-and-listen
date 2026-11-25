@@ -73,6 +73,72 @@ export async function render(page, { go }) {
     ),
   );
 
+  // ── Photo questions (vision) ───────────────────────────────────────────
+  let visionProvider = settings.visionProvider ?? "codex";
+  const visionModel = h("input", {
+    class: "input",
+    type: "text",
+    value: settings.visionModel ?? "",
+    placeholder: "비우면 공급자 기본 모델",
+  });
+  const visionModelField = field("모델 ID · 이미지 입력 지원 모델", visionModel);
+  const visionKey = h("input", { class: "input", type: "password", autocomplete: "off", spellcheck: false });
+  const visionKeyField = field("API 키 · 메모리에만 보관", visionKey);
+  const syncVision = () => {
+    visionKeyField.hidden = visionModelField.hidden = visionProvider === "codex";
+    visionKey.placeholder = settings.keys[visionProvider] ? "연결됨 · 바꾸려면 새 키 입력" : "API 키";
+  };
+  const vision = card(
+    {},
+    head(
+      "eye",
+      "사진 문항 엔진",
+      "Part 1 사진을 직접 보고 문항을 만든 뒤, 별도 호출로 정답 유일성·모호함·장면 중복을 검사합니다. 문항을 만들 때 사진이 이 엔진으로 전송됩니다.",
+    ),
+    field(
+      "이미지 입력 엔진",
+      segmented(
+        [
+          ["codex", "Codex · ChatGPT 로그인"],
+          ["openai", "GPT API"],
+          ["gemini", "Gemini API"],
+        ],
+        visionProvider,
+        (v) => ((visionProvider = v), syncVision()),
+      ),
+    ),
+    visionModelField,
+    visionKeyField,
+    h(
+      "div",
+      { class: "row end" },
+      h(
+        "a",
+        { class: "btn btn-ghost", href: "#/photos" },
+        icon("halls", 16),
+        h("span", { text: "사진 보관함" }),
+      ),
+      button(
+        "저장",
+        async () => {
+          if (visionProvider !== "codex" && visionKey.value) {
+            await api("settings", { keyProvider: visionProvider, apiKey: visionKey.value });
+            settings.keys[visionProvider] = true;
+            visionKey.value = "";
+          }
+          await api("settings", {
+            visionProvider,
+            visionModel: visionProvider === "codex" ? "" : visionModel.value.trim(),
+          });
+          await loadConnections();
+          syncVision();
+          toast("사진 문항 엔진을 저장했습니다.", "ok");
+        },
+        { kind: "primary" },
+      ),
+    ),
+  );
+
   // ── Codex ──────────────────────────────────────────────────────────────
   const auto = h("input", {
     type: "checkbox",
@@ -349,11 +415,12 @@ export async function render(page, { go }) {
     h(
       "div",
       { class: "settings-grid" },
-      h("div", { class: "stack" }, generation, codex, checks),
+      h("div", { class: "stack" }, generation, vision, codex, checks),
       h("div", { class: "stack" }, live, update, about),
     ),
   );
   syncText();
+  syncVision();
   return () => disposeUrl();
 }
 

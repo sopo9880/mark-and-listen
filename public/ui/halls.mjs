@@ -5,7 +5,7 @@ import { fmtMinutes } from "./dom.mjs";
 
 export async function render(page, { params, go }) {
   const which = params[0];
-  if (which === "toeic") return toeicForm(page, go);
+  if (which === "toeic") return toeicForm(page, go, (await api("photos")).photos);
   if (which === "cbt") return cbtForm(page, go);
   page.append(
     h(
@@ -77,7 +77,7 @@ function header(title, sub) {
   );
 }
 
-function toeicForm(page, go) {
+function toeicForm(page, go, library) {
   const spec = EXAMS.toeic.parts;
   const counts = Object.fromEntries(Object.entries(spec).map(([p, s]) => [p, s.count]));
   let scope = "full";
@@ -89,6 +89,8 @@ function toeicForm(page, go) {
     maxLength: 100,
   });
   const partArea = h("div");
+  const part1Box = h("div");
+  let part1 = library.length >= 6 ? "photos" : "illustrations";
   const summary = h("div", { class: "summary" });
   const inputs = {};
 
@@ -182,6 +184,7 @@ function toeicForm(page, go) {
     const durations = groups.length
       ? phaseDurations({ exam: "toeic", groups, config: {} })
       : { LC: 0, RC: 0 };
+    const photoShort = !!counts[1] && part1 === "photos" && library.length < counts[1];
     const segments = groups.reduce((n, g) => n + (g.part <= 2 ? g.count : g.part <= 4 ? g.count + 5 : 0), 0);
     summary.replaceChildren(
       h("h3", { text: "회차 요약" }),
@@ -189,8 +192,17 @@ function toeicForm(page, go) {
       line("Listening", lc ? `${lc}문항 · ${fmtMinutes(durations.LC)}` : "없음"),
       line("Reading", rc ? `${rc}문항 · ${fmtMinutes(durations.RC)}` : "없음"),
       line("AI 출제 요청", `${groups.length}회`),
+      counts[1]
+        ? line("Part 1 자료", part1 === "photos" ? `보관함 사진 ${counts[1]}장` : "연습용 삽화")
+        : null,
       line("Live 낭독 구간", lc ? `약 ${segments}개` : "없음"),
       error ? h("p", { class: "error-text", text: error }) : null,
+      photoShort
+        ? h("p", {
+            class: "error-text",
+            text: `보관함 사진이 부족합니다. (${library.length}/${counts[1]}장)`,
+          })
+        : null,
       h("p", {
         class: "muted small",
         text: "연습용 창작 문항이며 공식 TOEIC과 무관합니다. 점수는 원점수(정답 수)로만 표시합니다.",
@@ -198,12 +210,40 @@ function toeicForm(page, go) {
       button(
         "회차 만들기",
         async () => {
-          const e = await api("episodes", { exam: "toeic", counts, title: title.value });
+          const e = await api("episodes", { exam: "toeic", counts, title: title.value, part1 });
           toast("회차를 만들었어요. 제작 스튜디오에서 생성을 시작하세요.", "ok");
           go("episode/" + e.id);
         },
-        { kind: "primary", iconName: "plus", disabled: !!error },
+        { kind: "primary", iconName: "plus", disabled: !!error || photoShort },
       ),
+    );
+    part1Box.replaceChildren(
+      counts[1]
+        ? h(
+            "div",
+            { class: "part1-source" },
+            field(
+              "Part 1 사진 자료",
+              segmented(
+                [
+                  ["photos", `사진 보관함 (${library.length}장)`],
+                  ["illustrations", "연습용 삽화"],
+                ],
+                part1,
+                (v) => ((part1 = v), refresh()),
+              ),
+              part1 === "photos"
+                ? "덜 쓴 사진부터, 같은 장면의 변형 사진은 겹치지 않게 배정합니다. 설정의 ‘사진 문항 엔진’이 사진을 직접 보고 문항을 만든 뒤 따로 검증합니다."
+                : "설치본에 포함된 삽화 6개를 돌려 씁니다.",
+            ),
+            h(
+              "a",
+              { class: "btn btn-sm", href: "#/photos" },
+              icon("halls", 15),
+              h("span", { text: "보관함 관리" }),
+            ),
+          )
+        : null,
     );
   };
 
@@ -236,6 +276,7 @@ function toeicForm(page, go) {
             ),
           ),
           partArea,
+          part1Box,
         ),
         labs(go),
       ),
@@ -256,7 +297,7 @@ function labs(go) {
   return h(
     "details",
     { class: "card labs" },
-    h("summary", {}, icon("wand", 17), h("strong", { text: "실험실 · 낭독 검증과 사진 파일럿" })),
+    h("summary", {}, icon("wand", 17), h("strong", { text: "실험실 · 고정 대본 낭독 검증" })),
     h("p", {
       class: "muted",
       text: "고정 대본 세트로 Live 낭독 → 전사 대조 → 검수 → 오프라인 응시 흐름을 먼저 확인하세요. 문항 생성 없이 음원만 만듭니다.",
@@ -269,61 +310,11 @@ function labs(go) {
       button("전체 LC 100문항", () => fixed({ 1: 6, 2: 25, 3: 39, 4: 30 }, "고정 대본 · 전체 LC")),
     ),
     h("hr"),
-    photoPilot(go),
-  );
-}
-
-async function jpegForPilot(file) {
-  const picture = await createImageBitmap(file);
-  try {
-    const factor = Math.min(1, 1200 / Math.max(picture.width, picture.height));
-    const canvas = h("canvas", {
-      width: Math.max(1, Math.round(picture.width * factor)),
-      height: Math.max(1, Math.round(picture.height * factor)),
-    });
-    canvas.getContext("2d", { alpha: false }).drawImage(picture, 0, 0, canvas.width, canvas.height);
-    for (const quality of [0.85, 0.7, 0.55]) {
-      const data = canvas.toDataURL("image/jpeg", quality).slice("data:image/jpeg;base64,".length);
-      if (data.length <= 533336) return data;
-    }
-    throw Error("사진 크기가 너무 큽니다.");
-  } finally {
-    picture.close();
-  }
-}
-
-function photoPilot(go) {
-  const photos = h("input", { type: "file", multiple: true, accept: "image/jpeg", class: "input" });
-  const provider = select(
-    [
-      ["gemini", "Gemini API"],
-      ["openai", "GPT API"],
-    ],
-    "gemini",
-  );
-  const model = h("input", { class: "input", type: "text", placeholder: "예: gemini-2.5-flash" });
-  return h(
-    "div",
-    { class: "stack" },
-    h("h3", { text: "Part 1 · 사진 6장 파일럿" }),
     h("p", {
       class: "muted",
-      text: "JPEG 6장을 고르면 선택한 이미지 입력 모델이 사진을 보고 문항을 만들고, 별도 호출로 정답 유일성·모호함·중복을 검사합니다. 사진은 이 PC에만 저장됩니다.",
+      text: "Part 1 사진은 ‘사진 보관함’에 ZIP을 가져오면 일반 회차에 자동으로 배정됩니다. 사진은 이 PC에만 저장됩니다.",
     }),
-    h(
-      "div",
-      { class: "grid-3" },
-      field("JPEG 6장", photos),
-      field("이미지 공급자", provider),
-      field("모델 ID", model),
-    ),
-    button("사진으로 회차 만들기", async () => {
-      if (photos.files.length !== 6) throw Error("사진을 정확히 6장 선택하세요.");
-      if (!model.value.trim()) throw Error("이미지 입력 모델 ID를 입력하세요.");
-      const images = await Promise.all(Array.from(photos.files, jpegForPilot));
-      const e = await api("photo-pilot", { provider: provider.value, model: model.value.trim(), images });
-      go("episode/" + e.id);
-    }),
+    h("a", { class: "btn btn-sm", href: "#/photos", text: "사진 보관함 열기" }),
   );
 }
 
