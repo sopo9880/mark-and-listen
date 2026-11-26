@@ -166,6 +166,14 @@ export async function render(page, { params, go }) {
         start({ fixed: e.fixed }),
         { kind: "primary", iconName: "sparkle", disabled: other || attempted },
       );
+    // Failed items are skipped while others are still pending: offer the retry as soon as anything failed.
+    const retry =
+      p.failed && !mine && !p.ready && !openAttempt && p.stage !== "failed"
+        ? button(`실패 ${p.failed}개 다시 시도`, start({ retryFailed: true }), {
+            iconName: "refresh",
+            disabled: other || attempted,
+          })
+        : null;
     const status = mine
       ? production.message
       : other
@@ -198,7 +206,7 @@ export async function render(page, { params, go }) {
           progress(p.percent, 100, p.ready ? "ok" : ""),
           h("small", { class: "muted", text: status }),
         ),
-        cta,
+        h("div", { class: "row" }, retry, cta),
       ),
     );
   }
