@@ -1,5 +1,6 @@
 // Prompt construction and strict parsing of AI-generated question groups, per exam hall.
 import { LC_LAYOUT } from "../public/lib/toeic-fixed.mjs";
+import { validateDoc, docText, docSchemaHint, DOC_NAMES } from "../public/lib/docs.mjs";
 import {
   LETTERS,
   partsOf,
@@ -14,7 +15,18 @@ const illustrationFor = (g) =>
   g.part === 1 ? LC_LAYOUT.filter((x) => x.part === 1)[(Number(g.id.split("-")[1]) - 1) % 6] : null;
 
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
-const P3_GRAPHICS = ["table", "price list", "schedule", "floor directory", "coupon", "order form", "list"];
+// [document type, name used in "conversation and <name>"] — real-test graphic kinds.
+const P3_GRAPHICS = [
+  ["table", "price list"],
+  ["table", "schedule"],
+  ["table", "directory"],
+  ["map", "floor plan"],
+  ["map", "map"],
+  ["coupon", "coupon"],
+  ["chart", "graph"],
+  ["label", "label"],
+  ["invoice", "order form"],
+];
 const P4_KINDS = [
   "advertisement",
   "excerpt from a meeting",
@@ -28,7 +40,54 @@ const P4_KINDS = [
   "recorded message",
   "excerpt from a workshop",
 ];
-const P4_GRAPHICS = ["schedule", "weather forecast", "program", "price list", "table", "agenda"];
+const P4_GRAPHICS = [
+  ["table", "schedule"],
+  ["table", "program"],
+  ["table", "agenda"],
+  ["weather", "weather forecast"],
+  ["map", "map"],
+  ["chart", "graph"],
+];
+
+// Part 7 sets: suggested document types by number of documents (varied like the real test).
+const P7_SINGLE = [
+  "email",
+  "notice",
+  "article",
+  "advertisement",
+  "chat",
+  "form",
+  "webpage",
+  "memo",
+  "letter",
+  "invoice",
+  "review",
+  "poster",
+  "coupon",
+  "menu",
+  "ticket",
+];
+const P7_SETS = {
+  2: [
+    ["email", "form"],
+    ["notice", "email"],
+    ["advertisement", "review"],
+    ["webpage", "email"],
+    ["article", "letter"],
+    ["email", "invoice"],
+    ["table", "email"],
+    ["memo", "chat"],
+  ],
+  3: [
+    ["advertisement", "email", "review"],
+    ["webpage", "email", "invoice"],
+    ["notice", "table", "email"],
+    ["article", "email", "letter"],
+    ["email", "form", "chat"],
+    ["poster", "email", "review"],
+  ],
+};
+const P6_TYPES = ["email", "memo", "notice", "article", "letter", "advertisement", "webpage"];
 
 /** Real-test layout of a Part 3/4 set by its position: 3 speakers, graphic sets, implied-meaning questions. */
 export function setPlan(g) {
@@ -51,14 +110,14 @@ function setRules(g) {
   if (g.part !== 3 && g.part !== 4) return "";
   const plan = setPlan(g);
   return [
-    `Return "setType": a short lowercase phrase naming this set as in "Questions … refer to the following <setType>." Use "${plan.kind}${plan.graphic ? " and " + plan.graphic : ""}".`,
+    `Return "setType": a short lowercase phrase naming this set as in "Questions … refer to the following <setType>." Use "${plan.kind}${plan.graphic ? " and " + plan.graphic[1] : ""}".`,
     g.part === 3
       ? plan.threeSpeakers
         ? "Use exactly three speakers A, B and C (two of them the same gender is fine)."
         : "Use two speakers A and B, one man and one woman."
       : `One speaker (A) gives a ${plan.kind}.`,
     plan.graphic
-      ? `This set has a graphic: return "graphic":{"title":"...","rows":[["header","header"],["cell","cell"]]} — a ${plan.graphic} of 3 to 7 rows and 2 to 4 columns, short cells. Exactly one question starts with "Look at the graphic." and needs both the audio and the graphic to answer.`
+      ? `This set has a graphic (a ${plan.graphic[1]}): return "graphic": ${docSchemaHint([plan.graphic[0]])}. Keep it short and readable at a glance (tables 3–7 rows, maps 2–4 rows × 2–4 columns). Exactly one question starts with "Look at the graphic." and can be answered only by combining the audio with the graphic.`
       : "",
     plan.implied
       ? 'One question asks what a speaker means/implies when he or she says "<exact short quote from the script>"; the quote must appear word for word in the turns.'
@@ -69,20 +128,31 @@ function setRules(g) {
     .join(" ");
 }
 
+function part7Types(g) {
+  if (g.documents >= 2) return pick(P7_SETS[g.documents] ?? P7_SETS[3]);
+  return [pick(P7_SINGLE)];
+}
+
 function toeicPrompt(g) {
   const image = illustrationFor(g);
   return [
     `Create original TOEIC-style Part ${g.part} material, exactly ${g.count} questions. JSON only, no tools.`,
-    `Schema: {"passages":[{"title":"...","body":"..."}],"turns":[{"speaker":"A","text":"spoken text"}],"questions":[{"question":"...","choices":["..."],"answer":0,"explanation":"한국어 해설"}]${g.part === 3 || g.part === 4 ? ',"setType":"..."' : ""}}.`,
+    `Schema: {"passages":[typed documents, Part 6/7 only],"turns":[{"speaker":"A","text":"spoken text"}],"questions":[{"question":"...","choices":["..."],"answer":0,"explanation":"한국어 해설"}]${g.part === 3 || g.part === 4 ? ',"setType":"..."' : ""}}.`,
     `Each question has ${g.part === 2 ? 3 : 4} distinct choices, one zero-based answer, Korean explanation. Place the correct answer at a random index.`,
     g.part <= 4
       ? "Listening: turns contain ONLY conversation/announcement, not questions, options, answers. Part 3 has 3–10 alternating A/B turns (a third speaker C is allowed). Part 4 narrator turns. Part 1/2 turns empty. In every spoken text (turns, Part 1/2 choices, Part 2-4 questions) write numbers, prices, times, dates and percentages in words (e.g. 'nine thirty', 'fifteen dollars', 'the third floor') so narration can be checked word by word."
       : "Reading: turns empty.",
     setRules(g),
     g.part === 6
-      ? "One coherent passage with exactly four blanks numbered [1] to [4], including sentence insertion."
+      ? `"passages" holds exactly one typed document, ${docSchemaHint([pick(P6_TYPES)])}, whose body has exactly four blanks numbered [1] to [4] (one of them a sentence-insertion blank).`
       : g.part === 7
-        ? `Exactly ${g.documents} complete related documents; questions answerable from them.`
+        ? `"passages" holds exactly ${g.documents} complete related typed documents in this order: ${part7Types(
+            g,
+          )
+            .map((t) => docSchemaHint([t]))
+            .join(
+              " , then ",
+            )}. Questions are answerable only from them${g.documents > 1 ? "; at least one question needs two documents" : ""}. For a text-message chain, one question may ask what a writer means by an exact short quote from it.`
         : g.part === 5
           ? "One _____ blank per question; no passages."
           : "No reading passages.",
@@ -179,7 +249,11 @@ export function parseGroup(raw, g, e = { exam: "toeic" }) {
     return { ...g, status: "ready", reviewed: false, questions, passages: [], segments: [], error: null };
 
   const passages = (d.passages ?? []).map((p) => {
-    if (!text(p.title, 200) || !text(p.body, 10000)) throw Error("지문 형식 오류");
+    if (p && typeof p === "object" && typeof p.type === "string") {
+      const doc = validateDoc(p);
+      return { title: DOC_NAMES[doc.type], body: docText(doc), doc };
+    }
+    if (!text(p?.title, 200) || !text(p?.body, 10000)) throw Error("지문 형식 오류");
     return { title: p.title, body: p.body };
   });
   if (g.documents && passages.length !== g.documents) throw Error("지문 묶음 수 불일치");
@@ -265,18 +339,10 @@ function setExtras(d, g, turns, questions) {
   }
   if (d.graphic !== undefined && d.graphic !== null) {
     const gr = d.graphic;
-    const rows = gr?.rows;
-    if (
-      !text(gr?.title, 80) ||
-      !Array.isArray(rows) ||
-      rows.length < 2 ||
-      rows.length > 9 ||
-      rows.some((r) => !Array.isArray(r) || r.length !== rows[0].length || r.length < 2 || r.length > 4) ||
-      rows.flat().some((c) => typeof c !== "string" || c.length > 60)
-    )
-      throw Error("그래픽 표 형식 오류");
+    // Older answers send a bare table {title, rows}.
+    const doc = validateDoc(gr && !gr.type && Array.isArray(gr.rows) ? { type: "table", ...gr } : gr);
     if (!questions.some((q) => /look at the graphic/i.test(q.question))) throw Error("그래픽 문항 누락");
-    out.table = { title: gr.title.trim(), rows: rows.map((r) => r.map((c) => c.trim())) };
+    out.doc = doc;
   }
   return out;
 }

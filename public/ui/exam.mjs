@@ -1,4 +1,5 @@
-import { h, icon, button, confirmDialog, toast, fmtClock, graphicTable } from "./dom.mjs";
+import { groupMaterial } from "./material.mjs";
+import { h, icon, button, confirmDialog, toast, toastError, fmtClock } from "./dom.mjs";
 import { api, loadEpisode } from "./api.mjs";
 import {
   examOf,
@@ -155,15 +156,7 @@ export async function render(page, { params, go }) {
         else paper.append(h("h2", { class: "part-title", text: partLabel(e, g.part) }));
       }
       const block = h("div", { class: "q-group", dataset: { group: g.id } });
-      if (g.image || g.graphic)
-        block.append(
-          h("img", { class: "figure", src: g.image || g.graphic, alt: g.imageAlt || g.graphicAlt || "" }),
-        );
-      if (g.table) block.append(graphicTable(g.table));
-      for (const p of g.passages ?? [])
-        block.append(
-          h("article", { class: "passage" }, h("h4", { text: p.title }), h("p", { text: p.body })),
-        );
+      block.append(...groupMaterial(g));
       for (const q of g.questions) {
         const num = numbers.get(q.id);
         const listenOnly = e.exam === "toeic" && q.part <= 2;
@@ -273,7 +266,7 @@ export async function render(page, { params, go }) {
         s = await api("attempt/action", { id, attemptId, action: a });
         paint();
       })
-      .catch((err) => toast(err.message, "error"));
+      .catch((err) => toastError(err));
     return chain;
   }
 

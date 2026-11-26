@@ -2,10 +2,14 @@
 // alone (no keys, no explanations). The group is accepted only when every answer matches the key, so users
 // never have to review generated questions — and never see them before the exam.
 import { LETTERS } from "../public/lib/exams.mjs";
+import { docText } from "../public/lib/docs.mjs";
 
 export function solvePrompt(e, g) {
   const material = [];
   for (const p of g.passages ?? []) material.push(`[Document: ${p.title}]\n${p.body}`);
+  // The graphic is part of the material: "Look at the graphic." questions cannot be solved without it.
+  const graphic = g.doc ?? (g.table ? { type: "table", ...g.table } : null);
+  if (graphic) material.push(`[Graphic in the test book]\n${docText(graphic)}`);
   const transcript = (g.segments ?? [])
     .filter((s) => (s.role ? s.role === "turn" : s.speaker !== "narrator"))
     .map((s) => `${s.speaker}: ${s.text}`)

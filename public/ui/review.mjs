@@ -1,4 +1,5 @@
-import { h, icon, card, chip, progress, segmented, fmtDate, fmtClock, graphicTable, button } from "./dom.mjs";
+import { groupMaterial } from "./material.mjs";
+import { h, icon, card, chip, progress, segmented, fmtDate, fmtClock, button } from "./dom.mjs";
 import { api, loadEpisode } from "./api.mjs";
 import { examOf, partLabel, isAudioGroup } from "../lib/exams.mjs";
 import { advanceAttempt } from "../lib/attempt.mjs";
@@ -133,20 +134,7 @@ export async function render(page, { params }) {
           h("small", { class: "muted", text: g.id }),
         ),
       );
-      if (g.image || g.graphic)
-        block.append(
-          h("img", { class: "figure", src: g.image || g.graphic, alt: g.imageAlt || g.graphicAlt || "" }),
-        );
-      if (g.table) block.append(graphicTable(g.table));
-      for (const p of g.passages ?? [])
-        block.append(
-          h(
-            "details",
-            { class: "passage" },
-            h("summary", { text: "지문 · " + p.title }),
-            h("p", { text: p.body }),
-          ),
-        );
+      block.append(...groupMaterial(g, { open: false }));
       if (isAudioGroup(e, g) && g.segments.length)
         block.append(
           h(

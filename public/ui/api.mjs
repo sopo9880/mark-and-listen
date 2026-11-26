@@ -1,4 +1,5 @@
 // Local API client, shared state and the background production loop.
+import { explain } from "./errors.mjs";
 let token = "";
 
 export async function api(path, body) {
@@ -98,8 +99,8 @@ export const production = {
         : "생성이 끝났습니다.";
     } catch (error) {
       this.lastError = error;
-      this.message = error.message;
-      if (error.status === 429) this.message += " 잠시 후 다시 시작하세요.";
+      const { title, detail } = explain(error);
+      this.message = detail ? `${title} — ${detail}` : title;
       throw error;
     } finally {
       this.running = false;

@@ -60,7 +60,6 @@ const json = async (req) => {
     throw fail(400, "JSON 오류");
   }
 };
-/** Test mode: the whole listening section as one WAV, with the same pauses the exam timeline uses. */
 /** Linear resampling of 16-bit mono PCM (used only when a bundled clip and Live audio differ in rate). */
 function resample(pcm, from, to) {
   if (from === to) return pcm;
@@ -115,6 +114,18 @@ export async function listeningWav(store, e, directions) {
 }
 
 /** Consecutive timeline entries of one question group (or one run of directions), for chunked re-transcription. */
+/** Export: the listening section (or one part) as one WAV with the exam's pauses and directions. */
+export async function exportWav(store, e, directions, part = null) {
+  const partOf = new Map(e.groups.map((g) => [g.id, g.part]));
+  const entries = audioTimeline(e).filter((x) => {
+    if (x.status !== "ready") return false;
+    if (!part) return true;
+    if (x.groupId) return partOf.get(x.groupId) === part;
+    return x.key === `p${part}-directions` || (part === 1 && x.key === "p1-begin");
+  });
+  return joinTimeline(store, e, entries, directions);
+}
+
 export function listeningChunks(e) {
   const out = [];
   for (const entry of audioTimeline(e)) {
@@ -272,7 +283,14 @@ export async function buildServer({
     if (!testMode && logs.length > 500) logs.splice(0, logs.length - 500);
   };
   const errText = (err) =>
-    [err?.status && `HTTP ${err.status}`, err?.code, err?.message ?? String(err)].filter(Boolean).join(" · ");
+    [
+      err?.status && `HTTP ${err.status}`,
+      err?.code,
+      err?.message ?? String(err),
+      err?.reason && !String(err.message).includes(err.reason) && `원인: ${err.reason}`,
+    ]
+      .filter(Boolean)
+      .join(" · ");
   // Gemini narration reuses open Live sessions (one per model and voice) across segments.
   const geminiPool = live ? null : createGeminiLivePool({ onEvent: (m) => log("live", m) });
   let lastVoice = null; // narration is produced voice by voice: stay with this voice while it has lines left
@@ -399,6 +417,20 @@ export async function buildServer({
           "Content-Type": "audio/wav",
           "Content-Length": wav.length,
           "Cache-Control": "private, max-age=86400",
+        });
+        res.end(req.method === "HEAD" ? undefined : wav);
+        return;
+      }
+      const exported = /^\/api\/export\/([a-zA-Z0-9-]+)\/(listening|part-[1-4])\.wav$/.exec(path);
+      if (exported && ["GET", "HEAD"].includes(req.method)) {
+        const e = await store.read(exported[1]);
+        const part = exported[2] === "listening" ? null : Number(exported[2].slice(5));
+        const wav = await exportWav(store, e, directions, part);
+        const name = `${e.title.replace(/[\\/:*?"<>|]+/g, " ").trim() || "mark-and-listen"} - ${part ? `Part ${part}` : "LC"}.wav`;
+        res.writeHead(200, {
+          "Content-Type": "audio/wav",
+          "Content-Length": wav.length,
+          "Content-Disposition": `attachment; filename="export.wav"; filename*=UTF-8''${encodeURIComponent(name)}`,
         });
         res.end(req.method === "HEAD" ? undefined : wav);
         return;
@@ -956,6 +988,7 @@ export async function buildServer({
                   Object.assign(g, parsed);
                 }
                 Object.assign(g, { verified: true, error: null });
+                delete g.lastError;
                 log("ok", `문항 ${g.id} 검증 통과`);
                 await store.write(e);
               } catch (err) {

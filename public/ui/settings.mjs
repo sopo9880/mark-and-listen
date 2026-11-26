@@ -1,4 +1,4 @@
-import { h, icon, card, button, field, select, segmented, toast, confirmDialog } from "./dom.mjs";
+import { h, icon, card, button, field, select, segmented, toast, toastError, confirmDialog } from "./dom.mjs";
 import { api, loadConnections, state } from "./api.mjs";
 import { diffView } from "./studio.mjs";
 import { themeSwitch } from "./lux-theme.mjs";
@@ -30,7 +30,7 @@ export async function render(page, { go }) {
   const auto = h("input", {
     type: "checkbox",
     checked: settings.autoUpdate,
-    onchange: () => api("settings", { autoUpdate: auto.checked }).catch((e) => toast(e.message, "error")),
+    onchange: () => api("settings", { autoUpdate: auto.checked }).catch((e) => toastError(e)),
   });
   const loginNote = h("p", { class: "muted small" });
   const codex = card(

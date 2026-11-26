@@ -1,4 +1,4 @@
-import { h, icon, card, button, field, select, segmented, toast } from "./dom.mjs";
+import { h, icon, card, button, field, select, segmented, toast, toastError } from "./dom.mjs";
 import { api, production, state } from "./api.mjs";
 import {
   EXAMS,
@@ -210,7 +210,7 @@ function toeicForm(page, go) {
           const e = await api("episodes", { exam: "toeic", counts, title: title.value });
           toast("회차를 만들었어요. 문항 생성을 시작합니다.", "ok");
           go("episode/" + e.id);
-          production.start(e.id).catch((err) => toast(err.message, "error"));
+          production.start(e.id).catch((err) => toastError(err));
         },
         { kind: "primary", iconName: "plus", disabled: !!error },
       ),
@@ -261,7 +261,7 @@ function labs(go) {
   const fixed = async (counts, label) => {
     const e = await api("episodes", { exam: "toeic", counts, title: label, fixed: true });
     go("episode/" + e.id);
-    production.start(e.id, { fixed: true }).catch((err) => toast(err.message, "error"));
+    production.start(e.id, { fixed: true }).catch((err) => toastError(err));
   };
   return h(
     "details",
@@ -441,7 +441,7 @@ function cbtForm(page, go) {
           });
           toast("회차를 만들었어요. 바로 문항 생성을 시작합니다.", "ok");
           go("episode/" + e.id);
-          production.start(e.id).catch((err) => toast(err.message, "error"));
+          production.start(e.id).catch((err) => toastError(err));
         },
         { kind: "primary", iconName: "sparkle", disabled: !!error },
       ),

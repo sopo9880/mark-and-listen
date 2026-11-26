@@ -101,7 +101,7 @@ export function button(label, onClick, { kind = "", iconName, title, disabled, s
     try {
       await onClick?.(event);
     } catch (error) {
-      toast(error.message || String(error), "error");
+      toastError(error);
     } finally {
       delete b.dataset.busy;
       b.classList.remove("is-busy");
@@ -110,7 +110,15 @@ export function button(label, onClick, { kind = "", iconName, title, disabled, s
   return b;
 }
 
-export { toast } from "./lux-toast.mjs";
+import { toast } from "./lux-toast.mjs";
+import { explain } from "./errors.mjs";
+export { toast };
+
+/** Shows an error with a plain-language title and what to do next. */
+export function toastError(error) {
+  const { title, detail } = explain(error);
+  toast(title, "error", 8000, detail || undefined);
+}
 
 /** Promise-based modal dialog. Resolves with true (confirm) or false. */
 export function confirmDialog({ title, body, confirm = "확인", cancel = "취소", danger = false }) {

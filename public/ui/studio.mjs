@@ -1,3 +1,4 @@
+import { groupMaterial } from "./material.mjs";
 import {
   h,
   icon,
@@ -10,7 +11,6 @@ import {
   promptDialog,
   segmented,
   fmtDate,
-  graphicTable,
 } from "./dom.mjs";
 import { api, loadEpisode, production, onChange, state } from "./api.mjs";
 import { isAudioGroup, partLabel, LETTERS, examOf } from "../lib/exams.mjs";
@@ -89,7 +89,7 @@ export async function render(page, { params, go }) {
       ),
     );
     pipeline.replaceChildren(pipelineCard(e, p));
-    history.replaceChildren(historyCard(e));
+    history.replaceChildren(exportCard(e, p), historyCard(e));
     if (testMode) inspector.replaceChildren(listenCard(e, p), groupsCard(e));
   };
 
@@ -207,6 +207,57 @@ export async function render(page, { params, go }) {
           h("small", { class: "muted", text: status }),
         ),
         h("div", { class: "row" }, retry, cta),
+      ),
+    );
+  }
+
+  /** Downloads: the listening audio as WAV, and printable PDFs of the test book, answer sheet and key. */
+  function exportCard(e, p) {
+    if (!p.groupsReady) return h("div");
+    const audioParts = [
+      ...new Set(e.groups.filter((g) => isAudioGroup(e, g) && g.status === "ready").map((g) => g.part)),
+    ];
+    const fileTitle = e.title.replace(/[\\/:*?"<>|]+/g, " ").trim() || "mark-and-listen";
+    const dl = (href, label, name) =>
+      h(
+        "a",
+        { class: "btn btn-sm", href, download: name },
+        icon("headphones", 15),
+        h("span", { text: label }),
+      );
+    const pdf = (kind, label) =>
+      h(
+        "a",
+        { class: "btn btn-sm", href: `#/print/${id}/${kind}` },
+        icon("book", 15),
+        h("span", { text: label }),
+      );
+    return card(
+      {},
+      h("div", { class: "card-head" }, h("h2", {}, icon("arrow", 18), " 내보내기")),
+      h("p", {
+        class: "muted small",
+        text:
+          p.segments && p.segmentsReady < p.segments
+            ? `음원은 준비된 구간(${p.segmentsReady}/${p.segments})만 시험 간격대로 이어 붙입니다.`
+            : "음원은 실제 시험처럼 안내·번호·답안 시간 간격까지 넣어 하나의 WAV로 저장합니다. PDF는 인쇄 창에서 ‘PDF로 저장’을 고르세요.",
+      }),
+      audioParts.length && p.segmentsReady
+        ? h(
+            "div",
+            { class: "row wrap" },
+            dl(`/api/export/${id}/listening.wav`, "LC 전체 음원 (WAV)", `${fileTitle} - LC.wav`),
+            ...audioParts.map((part) =>
+              dl(`/api/export/${id}/part-${part}.wav`, `Part ${part}`, `${fileTitle} - Part ${part}.wav`),
+            ),
+          )
+        : null,
+      h(
+        "div",
+        { class: "row wrap" },
+        pdf("paper", "시험지 PDF"),
+        pdf("omr", "답안지 PDF"),
+        pdf("key", "정답·해설·대본 PDF"),
       ),
     );
   }
@@ -436,17 +487,18 @@ export async function render(page, { params, go }) {
   function groupBody(g) {
     const audio = isAudioGroup(e, g);
     const body = h("div", { class: "group-body" });
-    if (g.error || g.lastError)
+    if (g.error || (g.lastError && g.status !== "ready"))
       body.append(
         h("p", {
           class: "error-text",
-          text: [g.error, g.lastError && `마지막 내부 오류: ${g.lastError}`].filter(Boolean).join(" · "),
+          text: [g.error, g.status !== "ready" && g.lastError && `마지막 내부 오류: ${g.lastError}`]
+            .filter(Boolean)
+            .join(" · "),
         }),
       );
-    if (g.table) body.append(graphicTable(g.table));
+    body.append(...groupMaterial(g));
     if (g.image || g.graphic)
       body.append(
-        h("img", { class: "figure", src: g.image || g.graphic, alt: g.imageAlt || g.graphicAlt || "" }),
         g.photoName
           ? h(
               "div",
@@ -462,8 +514,6 @@ export async function render(page, { params, go }) {
             )
           : null,
       );
-    for (const p of g.passages ?? [])
-      body.append(h("div", { class: "passage" }, h("h4", { text: p.title }), h("p", { text: p.body })));
     for (const [i, q] of (g.questions ?? []).entries())
       body.append(
         h(

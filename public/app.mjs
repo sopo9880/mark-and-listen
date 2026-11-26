@@ -1,4 +1,4 @@
-import { h, icon, toast } from "./ui/dom.mjs";
+import { h, icon, toast, toastError } from "./ui/dom.mjs";
 import { connect, onChange, production, loadConnections, state } from "./ui/api.mjs";
 import * as home from "./ui/home.mjs";
 import * as halls from "./ui/halls.mjs";
@@ -8,6 +8,7 @@ import * as exam from "./ui/exam.mjs";
 import * as review from "./ui/review.mjs";
 import * as notebook from "./ui/notebook.mjs";
 import * as settings from "./ui/settings.mjs";
+import * as print from "./ui/print.mjs";
 
 const NAV = [
   ["home", "홈", "home"],
@@ -26,6 +27,7 @@ const ROUTES = [
   [/^review\/([\w-]+)\/([\w-]+)$/, review, "library"],
   [/^notebook$/, notebook, "notebook"],
   [/^settings$/, settings, "settings"],
+  [/^print\/([\w-]+)\/(paper|omr|key)$/, print, null],
 ];
 
 const main = document.getElementById("main");
@@ -48,7 +50,7 @@ async function route() {
     // A view's cleanup failing must not block navigation.
   }
   dispose = () => {};
-  document.body.classList.toggle("focus-mode", view === exam);
+  document.body.classList.toggle("focus-mode", view === exam || view === print);
   for (const a of document.querySelectorAll("#nav a")) a.classList.toggle("active", a.dataset.nav === nav);
   main.replaceChildren(h("div", { class: "loading" }, h("span", { class: "spinner" })));
   try {
@@ -147,7 +149,8 @@ onChange((what) => {
   if (what === "connections") renderConnections();
 });
 window.addEventListener("hashchange", route);
-window.addEventListener("unhandledrejection", (e) => toast(e.reason?.message ?? String(e.reason), "error"));
+window.addEventListener("unhandledrejection", (e) => toastError(e.reason));
+window.addEventListener("error", (e) => toastError(e.error ?? e.message));
 
 renderNav();
 try {

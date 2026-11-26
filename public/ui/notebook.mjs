@@ -1,4 +1,5 @@
-import { h, icon, card, chip, button, segmented, empty, fmtDate, graphicTable } from "./dom.mjs";
+import { groupMaterial } from "./material.mjs";
+import { h, icon, card, chip, button, segmented, empty, fmtDate } from "./dom.mjs";
 import { api, loadLibrary } from "./api.mjs";
 import { partLabel, isAudioGroup } from "../lib/exams.mjs";
 import { choiceMark, examName } from "./model.mjs";
@@ -102,22 +103,7 @@ export async function render(page) {
           ),
         ),
       ),
-      g.image || g.graphic
-        ? h("img", {
-            class: "figure small",
-            src: g.image || g.graphic,
-            alt: g.imageAlt || g.graphicAlt || "",
-          })
-        : null,
-      graphicTable(g.table, true),
-      ...(g.passages ?? []).map((p) =>
-        h(
-          "details",
-          { class: "passage" },
-          h("summary", { text: "지문 · " + p.title }),
-          h("p", { text: p.body }),
-        ),
-      ),
+      ...groupMaterial(g, { small: true, open: false }),
       isAudioGroup(e, g) && g.segments.length
         ? h(
             "details",

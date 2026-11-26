@@ -362,7 +362,13 @@ test("Part 3/4 sets carry their type, graphic table and quoted lines as in the r
     "Questions sixty-two through sixty-four refer to the following conversation and price list.",
   );
   assert.equal(parsed.segments.at(-1).text, `Number sixty-four. ${raw.questions[2].question}`);
-  assert.equal(parsed.table.title, "Price List");
+  assert.equal(parsed.doc.type, "table");
+  assert.equal(parsed.doc.title, "Price List");
+  const { solvePrompt } = await import("../src/verify.mjs");
+  assert.match(
+    solvePrompt({ exam: "toeic" }, parsed),
+    /\[Graphic in the test book\]\nPrice List\nItem \| Price/,
+  );
   assert.equal(parsed.setType, undefined);
   assert.throws(
     () =>
@@ -394,4 +400,31 @@ test("TOEIC numbering follows the real test book in partial episodes", () => {
     e.groups.map((g) => n.get(g.questions[0].id)),
     [7, 8, 9, 32, 35, 101, 102],
   );
+});
+
+test("Codex failures say why: usage limit, login, model, or Codex's own words", async () => {
+  const { generateWithCodex } = await import("../src/codex-engine.mjs");
+  const run =
+    (stdout, stderr = "") =>
+    async (exe, args) =>
+      args[0] === "login"
+        ? { code: 0, stdout: "Logged in using ChatGPT", stderr: "" }
+        : { code: 1, stdout, stderr };
+  const go = (r, extra = {}) =>
+    generateWithCodex({ executable: "codex", prompt: "p", runCommand: r, ...extra });
+  await assert.rejects(
+    go(run(JSON.stringify({ type: "error", message: "You've hit your usage limit." }))),
+    (e) => e.status === 429 && /사용량/.test(e.message),
+  );
+  await assert.rejects(
+    go(run("", "Error: unexpected status 401 Unauthorized")),
+    (e) => e.status === 400 && /로그인/.test(e.message),
+  );
+  await assert.rejects(
+    go(run(JSON.stringify({ type: "turn.failed", error: { message: "The model `gpt-x` does not exist" } })), {
+      model: "gpt-x",
+    }),
+    (e) => e.status === 400 && /gpt-x/.test(e.message),
+  );
+  await assert.rejects(go(run("", "error: something odd happened")), /something odd happened/);
 });

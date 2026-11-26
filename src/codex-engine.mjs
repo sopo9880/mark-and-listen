@@ -92,8 +92,7 @@ export async function generateWithCodex({
     }
     args.push("-");
     const result = await runCommand(executable, args, { cwd: scratch, stdin: prompt, signal });
-    if (result.code !== 0)
-      throw Error("Codex가 생성을 완료하지 못했어요. 로그인과 사용량, 설치 버전을 확인해 주세요.");
+    if (result.code !== 0) throw codexFailure(result, model, effort);
     let text;
     let completed = false;
     for (const line of result.stdout.split(/\r?\n/)) {
@@ -116,6 +115,52 @@ export async function generateWithCodex({
   } finally {
     if (scratch) await rm(scratch, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+/** What Codex said when it failed: its JSON error events first, then the last stderr lines. */
+export function codexReason(result) {
+  const said = [];
+  for (const line of String(result.stdout ?? "").split(/\r?\n/)) {
+    try {
+      const e = JSON.parse(line);
+      const m = e.type === "error" ? e.message : e.type === "turn.failed" ? e.error?.message : null;
+      if (typeof m === "string") said.push(m);
+    } catch {
+      // not an event line
+    }
+  }
+  const stderr = String(result.stderr ?? "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && /error|fail|limit|denied|unauthor|not found|unsupported|invalid/i.test(l));
+  // Never pass long or token-looking text through.
+  return [...said, ...stderr.slice(-3)]
+    .map((l) => l.replace(/[A-Za-z0-9_-]{32,}/g, "…").slice(0, 240))
+    .join(" · ");
+}
+
+function codexFailure(result, model, effort) {
+  const reason = codexReason(result);
+  const fail = (message, status) => Object.assign(Error(message), { status, reason });
+  if (/usage limit|rate.?limit|quota|429|too many requests/i.test(reason))
+    return fail("Codex 사용량 한도에 도달했어요. 한도가 풀린 뒤 다시 시도하세요.", 429);
+  if (/not logged in|unauthori[sz]ed|401|login|authenticat/i.test(reason))
+    return fail("Codex 로그인이 필요해요. 설정 › Codex에서 로그인해 주세요.", 400);
+  if (/reasoning|effort/i.test(reason) && effort)
+    return fail(`이 Codex 모델이 추론 정도 '${effort}'를 지원하지 않아요. 설정에서 바꿔 주세요.`, 400);
+  if (
+    /model/i.test(reason) &&
+    /not found|not supported|does not exist|unsupported|unknown|access/i.test(reason)
+  )
+    return fail(
+      `Codex 모델${model ? ` '${model}'` : ""}을(를) 이 계정에서 쓸 수 없어요. 설정에서 다른 모델을 골라 주세요.`,
+      400,
+    );
+  if (/network|ENOTFOUND|ECONN|timed? ?out|stream disconnected|connection/i.test(reason))
+    return fail("Codex가 OpenAI 서버에 연결하지 못했어요. 인터넷 연결을 확인하고 다시 시도하세요.");
+  return fail(
+    `Codex가 생성을 완료하지 못했어요${reason ? `: ${reason}` : ". 로그인과 사용량, 설치 버전을 확인해 주세요."}`,
+  );
 }
 
 export async function codexLoginStatus(executable) {

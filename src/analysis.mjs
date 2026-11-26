@@ -2,6 +2,7 @@
 // the wrong and unanswered questions with what the learner picked) and returns a short Korean study report.
 import { scoreAttempt } from "../public/lib/scoring.mjs";
 import { questionsOf, LETTERS, partsOf } from "../public/lib/exams.mjs";
+import { docText } from "../public/lib/docs.mjs";
 
 const clip = (t, n) => (String(t ?? "").length > n ? String(t).slice(0, n) + "…" : String(t ?? ""));
 
@@ -29,6 +30,7 @@ export function analysisPrompt(e, attempt) {
         picked: r.mark == null ? "미응답" : LETTERS[r.mark],
         ...(script ? { audioScript: clip(script, 700) } : {}),
         ...(g?.passages?.length ? { passage: clip(g.passages.map((p) => p.body).join("\n"), 700) } : {}),
+        ...(g?.doc ? { graphic: clip(docText(g.doc), 500) } : {}),
       };
     });
   const byPart = Object.entries(result.byPart).map(([p, s]) => ({
