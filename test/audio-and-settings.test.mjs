@@ -11,7 +11,7 @@ import { buildServer, voiceFor } from "../src/server.mjs";
 import { wavFromPcm } from "../src/gemini-live.mjs";
 import { fixedGroup } from "../src/episode-content.mjs";
 import { generateWithCodex } from "../src/codex-engine.mjs";
-import { audioTimeline, GAPS, blueprint } from "../public/lib/exams.mjs";
+import { audioTimeline, GAPS, blueprint, questionNumbers } from "../public/lib/exams.mjs";
 import { startAttempt } from "../public/lib/attempt.mjs";
 
 const wavOf = (seconds, rate = 24000) =>
@@ -353,7 +353,8 @@ test("Part 3/4 sets carry their type, graphic table and quoted lines as in the r
   };
   const e = {
     exam: "toeic",
-    groups: [{ id: "p1-1", count: 6 }, { id: "p2-1", count: 25 }, { id: "p3-1", count: 30 }, g],
+    // Only Part 3 sets come before this one: numbering still follows the real test (Part 3 starts at 32).
+    groups: [{ id: "p2-1", part: 2, count: 25 }, { id: "p3-1", part: 3, count: 30 }, g],
   };
   const parsed = parseGroup(raw, g, e);
   assert.equal(
@@ -380,4 +381,17 @@ test("Part 3/4 sets carry their type, graphic table and quoted lines as in the r
     /인용/,
   );
   assert.throws(() => parseGroup({ ...raw, questions: [q("a?"), q("b?"), q("c?")] }, g, e), /그래픽 문항/);
+});
+
+test("TOEIC numbering follows the real test book in partial episodes", () => {
+  const e = { exam: "toeic", groups: blueprint("toeic", { 2: 3, 3: 6, 5: 2 }) };
+  e.groups = e.groups.map((g) => ({
+    ...g,
+    questions: Array.from({ length: g.count }, (_, i) => ({ id: `${g.id}-q${i + 1}` })),
+  }));
+  const n = questionNumbers(e);
+  assert.deepEqual(
+    e.groups.map((g) => n.get(g.questions[0].id)),
+    [7, 8, 9, 32, 35, 101, 102],
+  );
 });

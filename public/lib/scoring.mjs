@@ -1,5 +1,5 @@
 // Raw-score grading. Pass/fail is only computed for exams whose episode config carries an explicit rule.
-import { partsOf, examOf, questionsOf } from "./exams.mjs";
+import { partsOf, examOf, questionsOf, questionNumbers } from "./exams.mjs";
 
 const summarize = (rows) => {
   const correct = rows.filter((r) => r.correct).length;
@@ -12,11 +12,12 @@ const summarize = (rows) => {
 };
 
 export function gradeRows(e, marks = {}) {
+  const numbers = questionNumbers(e);
   return questionsOf(e).map((q, index) => {
     const mark = Object.hasOwn(marks, q.id) ? marks[q.id] : null;
     return {
       id: q.id,
-      number: index + 1,
+      number: numbers.get(q.id) ?? index + 1,
       part: q.part,
       section: q.section,
       mark,

@@ -250,16 +250,33 @@ export function numberWords(n) {
   return TENS_WORDS[Math.floor(n / 10)] + (n % 10 ? "-" + ONES[n % 10] : "");
 }
 
-/** Number of the group's first question as the exam screen shows it (episode order). */
+/** Real TOEIC numbering: every part starts at its test-book number, also in episodes with only some parts. */
+export const TOEIC_FIRST = { 1: 1, 2: 7, 3: 32, 4: 71, 5: 101, 6: 131, 7: 147 };
+
+/** Number of the group's first question, as printed on the paper and spoken by the narrator. */
 export function firstNumberOf(e, g) {
-  let n = 1;
-  for (const x of e?.groups ?? []) {
-    if (x.id === g.id) return n;
-    n += x.count;
+  const toeic = (e?.exam ?? "toeic") === "toeic";
+  if (!e?.groups?.some((x) => x.id === g.id)) {
+    // A group parsed on its own: standard TOEIC numbering by its position in the part.
+    const i = Number(String(g.id).split("-")[1]) - 1;
+    return { 1: 1 + i, 2: 7 + i, 3: 32 + 3 * i, 4: 71 + 3 * i }[g.part] ?? 1;
   }
-  // A group parsed on its own: standard TOEIC numbering.
-  const i = Number(String(g.id).split("-")[1]) - 1;
-  return { 1: 1 + i, 2: 7 + i, 3: 32 + 3 * i, 4: 71 + 3 * i }[g.part] ?? 1;
+  let n = toeic ? (TOEIC_FIRST[g.part] ?? 1) : 1;
+  for (const x of e.groups) {
+    if (x.id === g.id) return n;
+    if (!toeic || x.part === g.part) n += x.count;
+  }
+  return n;
+}
+
+/** Question id → number shown on the paper, answer sheet and results. */
+export function questionNumbers(e) {
+  const out = new Map();
+  for (const g of e.groups) {
+    const first = firstNumberOf(e, g);
+    (g.questions ?? []).forEach((q, i) => out.set(q.id, first + i));
+  }
+  return out;
 }
 
 /** Episodes with exactly the 100 TOEIC listening questions get directions and question-number cues. */
@@ -279,7 +296,7 @@ export function audioTimeline(e) {
   // Part directions play in every TOEIC listening episode; the section intro/end, number cues and page turns only
   // fit the full 100-question layout.
   const full = isFullListening(e);
-  const fullOnly = (key) => /^(?:lc-intro|lc-end|num-\d+|next-page)$/.test(key);
+  const fullOnly = (key) => /^(?:lc-intro|lc-end|next-page)$/.test(key);
   const list = [];
   let at = 0;
   const add = (entry, duration, gap) => {
@@ -324,7 +341,7 @@ export function audioTimeline(e) {
       // Real-test order. Part 1–2: fixed number cue, then the item (Part 2: question voice, then response voice).
       // Part 3–4: the narrator reads the set introduction and "Number N. <question>" as episode segments.
       segs.forEach((s, i) => {
-        const n = number + 1 + (s.q ?? 0);
+        const n = firstNumberOf(e, g) + (s.q ?? 0);
         if (s.role === "prompt" || (g.part === 1 && s.role === "choices")) cue(`num-${n}`, GAPS.cue, g.id);
         const next = segs[i + 1];
         const gap =

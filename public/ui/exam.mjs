@@ -1,6 +1,13 @@
 import { h, icon, button, confirmDialog, toast, fmtClock, graphicTable } from "./dom.mjs";
 import { api, loadEpisode } from "./api.mjs";
-import { examOf, partLabel, audioTimeline, sectionOf, PAPER_DIRECTIONS } from "../lib/exams.mjs";
+import {
+  examOf,
+  partLabel,
+  audioTimeline,
+  sectionOf,
+  PAPER_DIRECTIONS,
+  questionNumbers,
+} from "../lib/exams.mjs";
 import { advanceAttempt, remainingSections, audioPosition } from "../lib/attempt.mjs";
 import { choiceMark } from "./model.mjs";
 
@@ -22,9 +29,7 @@ export async function render(page, { params, go }) {
   const clickToMark = e.exam !== "toeic";
   const timeline = audioTimeline(e);
   const audio = h("audio", { hidden: true, preload: "auto" });
-  const numbers = new Map();
-  let n = 0;
-  for (const g of e.groups) for (const q of g.questions) numbers.set(q.id, ++n);
+  const numbers = questionNumbers(e);
 
   const sectionLabel = h("span", { class: "section-pill" });
   const clock = h("strong", { class: "clock" });
