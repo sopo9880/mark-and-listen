@@ -291,6 +291,17 @@ function analysisCard(id, attemptId, saved) {
     }
   };
   if (saved) draw(saved);
-  else void run();
+  else
+    body.replaceChildren(
+      h("p", {
+        class: "muted",
+        text: "오답과 파트별 정답률을 Codex가 읽고 약점과 추천 학습을 정리합니다. 누를 때만 Codex를 한 번 사용합니다.",
+      }),
+      h(
+        "div",
+        { class: "row" },
+        button("약점 분석 받기", () => run(), { kind: "primary", iconName: "sparkle" }),
+      ),
+    );
   return card({ class: "analysis" }, head, body);
 }

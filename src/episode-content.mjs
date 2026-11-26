@@ -134,6 +134,11 @@ function part7Types(g) {
 }
 
 function toeicPrompt(g) {
+  return toeicLines(g).join(" ");
+}
+
+/** The TOEIC prompt as separate rules, so a batch can state shared rules once and set-specific rules per set. */
+export function toeicLines(g) {
   const image = illustrationFor(g);
   return [
     `Create original TOEIC-style Part ${g.part} material, exactly ${g.count} questions. JSON only, no tools.`,
@@ -160,9 +165,7 @@ function toeicPrompt(g) {
       ? `Use this supplied illustration: ${image.imageAlt}. Visible true fact: ${image.questions[0].choices[image.questions[0].answer]}`
       : "",
     "Each turn max 1100 characters.",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  ].filter(Boolean);
 }
 
 function cbtPrompt(e, g, previous = []) {

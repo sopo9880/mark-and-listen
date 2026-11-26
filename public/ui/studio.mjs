@@ -205,10 +205,38 @@ export async function render(page, { params, go }) {
           { class: "pipeline-status" },
           progress(p.percent, 100, p.ready ? "ok" : ""),
           h("small", { class: "muted", text: status }),
+          costLine(e),
         ),
         h("div", { class: "row" }, retry, cta),
       ),
     );
+  }
+
+  /** Codex calls, tokens and time spent on this episode, and Live narration time. */
+  function costLine(e) {
+    const c = e.stats?.codex,
+      l = e.stats?.live;
+    if (!c && !l) return null;
+    const k = (n) =>
+      n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n);
+    const t = (ms) => {
+      const s = Math.round(ms / 1000);
+      return s >= 3600
+        ? `${Math.floor(s / 3600)}시간 ${Math.floor((s % 3600) / 60)}분`
+        : s >= 60
+          ? `${Math.floor(s / 60)}분 ${s % 60}초`
+          : `${s}초`;
+    };
+    return h("small", {
+      class: "muted cost-line",
+      text: [
+        c &&
+          `Codex ${c.calls}회 · 입력 ${k(c.input)} (캐시 ${k(c.cached)}) · 출력 ${k(c.output)} 토큰 · ${t(c.ms)}`,
+        l && `Live 음원 ${l.segments}개 (${l.takes}번 시도) · ${t(l.ms)}`,
+      ]
+        .filter(Boolean)
+        .join("  ·  "),
+    });
   }
 
   /** Downloads: the listening audio as WAV, and printable PDFs of the test book, answer sheet and key. */

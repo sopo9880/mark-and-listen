@@ -15,6 +15,15 @@ import { createSecretStore } from "./secrets.mjs";
 import { transcribeWav, plausibleDuration } from "./stt.mjs";
 import { codexModels } from "./codex-models.mjs";
 import { analysisPrompt, parseAnalysis } from "./analysis.mjs";
+import {
+  pickBatch,
+  batchPrompt,
+  parseBatch,
+  solveBatchPrompt,
+  checkBatch,
+  repairPrompt,
+  applyRepair,
+} from "./batch.mjs";
 import { DirectionBundle } from "./directions.mjs";
 import { createServer } from "node:http";
 import { createHash, randomBytes } from "node:crypto";
@@ -202,6 +211,8 @@ export async function buildServer({
     visionModel: "",
     textEffort: "medium",
     visionEffort: "medium",
+    lightModel: "", // Part 2/5 generation and answer checks; empty = same as textModel
+    lightEffort: "low",
     sttModel: "",
     sttMode: "auto", // auto: separate transcription, Live transcript if it stays busy · live: Live transcript only
   };
@@ -291,6 +302,39 @@ export async function buildServer({
     ]
       .filter(Boolean)
       .join(" · ");
+  // Generation cost and time, per episode: Codex calls/tokens and Live takes, shown in the studio.
+  const fmtK = (n) => (n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n));
+  const addStats = (e, key, add) => {
+    e.stats ??= {};
+    const s = (e.stats[key] ??= {});
+    for (const [k, v] of Object.entries(add)) s[k] = (s[k] ?? 0) + v;
+  };
+  /** Every Codex call goes through here: model/effort choice, token + time log, per-episode totals. */
+  const codexCall = async ({ e, task, prompt, images, light = false, effort, model: forced, signal }) => {
+    const model = forced || (light && settings.lightModel) || settings.textModel || undefined;
+    const eff = effort ?? (light ? settings.lightEffort || "low" : settings.textEffort || "medium");
+    let usage = null;
+    const started = Date.now();
+    try {
+      return await codex({
+        executable: (await updater.executable()) ?? "codex",
+        prompt,
+        images,
+        model,
+        effort: eff,
+        signal,
+        onUsage: (u) => (usage = u),
+      });
+    } finally {
+      const ms = Date.now() - started;
+      const u = usage ?? { input: 0, cached: 0, output: 0 };
+      if (e) addStats(e, "codex", { calls: 1, input: u.input, cached: u.cached, output: u.output, ms });
+      log(
+        "info",
+        `Codex ${task} · ${model ?? "기본 모델"}/${eff} · ${(ms / 1000).toFixed(1)}s · 입력 ${fmtK(u.input)} (캐시 ${fmtK(u.cached)}) · 출력 ${fmtK(u.output)}${usage ? "" : " · 사용량 정보 없음"}`,
+      );
+    }
+  };
   // Gemini narration reuses open Live sessions (one per model and voice) across segments.
   const geminiPool = live ? null : createGeminiLivePool({ onEvent: (m) => log("live", m) });
   let lastVoice = null; // narration is produced voice by voice: stay with this voice while it has lines left
@@ -517,13 +561,13 @@ export async function buildServer({
               if (!allowed.includes(b[k])) throw fail(400, "공급자 오류");
               settings[k] = b[k];
             }
-          for (const k of ["liveModel", "textModel", "visionModel", "sttModel"])
+          for (const k of ["liveModel", "textModel", "visionModel", "lightModel", "sttModel"])
             if (b[k] !== undefined) {
               if (typeof b[k] !== "string" || b[k].length > 160 || !/^[a-zA-Z0-9_.:-]*$/.test(b[k]))
                 throw fail(400, "모델 ID 오류");
               settings[k] = b[k];
             }
-          for (const k of ["textEffort", "visionEffort"])
+          for (const k of ["textEffort", "visionEffort", "lightEffort"])
             if (b[k] !== undefined) {
               if (!["low", "medium", "high", "xhigh"].includes(b[k])) throw fail(400, "추론 정도 오류");
               settings[k] = b[k];
@@ -851,11 +895,9 @@ export async function buildServer({
           analysisBusy = true;
           try {
             log("info", `응시 분석 시작 ${e.id.slice(0, 8)} · ${settings.textModel || "Codex 기본 모델"}`);
-            const raw = await codex({
-              executable: (await updater.executable()) ?? "codex",
+            const raw = await codexCall({
+              task: "응시 분석",
               prompt: analysisPrompt(e, advanceAttempt(a)),
-              model: settings.textModel || undefined,
-              effort: settings.textEffort || "medium",
               signal: AbortSignal.timeout(300000),
             });
             const analysis = { ...parseAnalysis(raw), at: Date.now(), model: settings.textModel || "codex" };
@@ -882,7 +924,8 @@ export async function buildServer({
           const close = () => abort.abort();
           res.once("close", close);
           try {
-            const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(300000)]);
+            // A batch is up to four Codex calls (make, check, rewrite, re-check).
+            const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(900000)]);
             if (path === "/api/test-live") {
               const args = await liveArgs();
               const r = await verifiedNarration(
@@ -918,27 +961,115 @@ export async function buildServer({
                   if (seg.status === "failed") Object.assign(seg, { status: "pending", error: null });
               await store.write(e);
             }
-            const textCall = async (prompt) => {
-              const provider = settings.textProvider;
-              if (provider !== "codex" && !getKey(provider))
-                throw fail(400, "설정에서 문항 생성 엔진의 API 키를 연결하세요.");
-              return provider === "codex"
-                ? codex({
-                    executable: (await updater.executable()) ?? "codex",
-                    prompt,
-                    model: settings.textModel || undefined,
-                    effort: settings.textEffort || "medium",
-                    signal,
-                  })
-                : generate({
-                    provider,
-                    apiKey: getKey(provider),
-                    model: settings.textModel || undefined,
-                    prompt,
-                    signal,
-                  });
-            };
+            const textCall = (prompt, task, light = false) => codexCall({ e, task, prompt, light, signal });
             let g = e.groups.find((x) => x.status !== "ready" && x.status !== "failed");
+            if (g && e.exam === "toeic" && !g.photoHash && !(e.fixed || b.fixed === true)) {
+              // Several sets of one part per Codex call, one solver call for all of them, and a rewrite of only
+              // the questions whose key did not hold up.
+              const batch = pickBatch(e, g);
+              for (const x of batch) x.tries = (x.tries ?? 0) + 1;
+              const label = `Part ${g.part} ${batch.length}세트`;
+              const light = g.part === 2 || g.part === 5;
+              const settle = (x, reason) => {
+                log("error", `문항 ${x.id} 실패: ${reason}`);
+                x.lastError = String(reason).slice(0, 300);
+                if (x.tries < MAX_TRIES) x.status = "pending";
+                else {
+                  x.status = "failed";
+                  x.error = "문항을 만들지 못했습니다. 잠시 뒤 ‘실패 항목 다시 시도’를 눌러 주세요.";
+                }
+              };
+              const started = Date.now();
+              try {
+                log("info", `문항 생성 ${label}: ${batch.map((x) => x.id).join(", ")}`);
+                const made = parseBatch(
+                  await codexCall({ e, task: `생성 · ${label}`, prompt: batchPrompt(batch), light, signal }),
+                  batch,
+                  e,
+                );
+                for (const m of made) if (m.error) settle(m.g, m.error);
+                const good = made.filter((m) => m.parsed);
+                const pass = [];
+                if (good.length) {
+                  const checks = checkBatch(
+                    await codexCall({
+                      e,
+                      task: `정답 확인 · ${good.length}세트`,
+                      prompt: solveBatchPrompt(
+                        e,
+                        good.map((m) => m.parsed),
+                      ),
+                      light: true,
+                      signal,
+                    }),
+                    good.map((m) => m.parsed),
+                  );
+                  const fix = [];
+                  good.forEach((m, i) => {
+                    if (checks[i].ok) pass.push(m);
+                    else if (checks[i].wrong?.length) fix.push({ ...m, wrong: checks[i].wrong });
+                    else settle(m.g, checks[i].reason);
+                  });
+                  if (fix.length) {
+                    log(
+                      "info",
+                      `정답이 갈린 문항만 다시 쓰기: ${fix.map((f) => `${f.g.id}#${f.wrong.map((k) => k + 1).join(",")}`).join(" ")}`,
+                    );
+                    const repaired = applyRepair(
+                      await codexCall({
+                        e,
+                        task: `문항 수정 · ${fix.length}세트`,
+                        prompt: repairPrompt(
+                          e,
+                          fix.map((f) => ({ g: f.parsed, wrong: f.wrong })),
+                        ),
+                        signal,
+                      }),
+                      fix.map((f) => ({ g: f.g, data: f.data, wrong: f.wrong })),
+                      e,
+                    );
+                    for (const r of repaired) if (r.error) settle(r.g, r.error);
+                    const ok2 = repaired.filter((r) => r.parsed);
+                    if (ok2.length) {
+                      const again = checkBatch(
+                        await codexCall({
+                          e,
+                          task: `정답 재확인 · ${ok2.length}세트`,
+                          prompt: solveBatchPrompt(
+                            e,
+                            ok2.map((r) => r.parsed),
+                          ),
+                          light: true,
+                          signal,
+                        }),
+                        ok2.map((r) => r.parsed),
+                      );
+                      ok2.forEach((r, i) => (again[i].ok ? pass.push(r) : settle(r.g, again[i].reason)));
+                    }
+                  }
+                }
+                for (const m of pass) {
+                  Object.assign(m.g, m.parsed, { verified: true, error: null });
+                  delete m.g.lastError;
+                  log("ok", `문항 ${m.g.id} 검증 통과`);
+                }
+                addStats(e, "questions", { ms: Date.now() - started, sets: pass.length });
+              } catch (err) {
+                log("error", `문항 생성 ${label} 실패: ${errText(err)}`);
+                if (err.status === 400 || err.status === 429) {
+                  for (const x of batch) {
+                    x.tries -= 1;
+                    x.error = err.message;
+                  }
+                  await store.write(e);
+                  throw err;
+                }
+                for (const x of batch) if (x.status !== "ready") settle(x, err.message ?? String(err));
+              }
+              await store.write(e);
+              send(res, { episode: e, more: true });
+              return;
+            }
             if (g) {
               g.tries = (g.tries ?? 0) + 1;
               try {
@@ -950,8 +1081,6 @@ export async function buildServer({
                   };
                   if (vision.provider !== "codex" && !getKey(vision.provider))
                     throw fail(400, "설정에서 사진 문항 엔진(이미지 입력)의 API 키를 연결하세요.");
-                  const executable =
-                    vision.provider === "codex" ? ((await updater.executable()) ?? "codex") : null;
                   Object.assign(
                     g,
                     await createPhotoQuestion({
@@ -960,11 +1089,12 @@ export async function buildServer({
                       group: g,
                       modelCall: ({ images, prompt }) =>
                         vision.provider === "codex"
-                          ? codex({
-                              executable,
+                          ? codexCall({
+                              e,
+                              task: `사진 문항 ${g.id}`,
                               prompt,
                               images,
-                              model: vision.model || undefined,
+                              model: vision.model || settings.textModel || undefined,
                               effort: settings.visionEffort || "medium",
                               signal,
                             })
@@ -982,8 +1112,11 @@ export async function buildServer({
                   Object.assign(g, fixedGroup(g));
                 } else {
                   log("info", `문항 생성 ${g.id} (시도 ${g.tries})`);
-                  const parsed = parseGroup(await textCall(groupPrompt(e, g)), g, e);
-                  const check = checkAnswers(await textCall(solvePrompt(e, parsed)), parsed);
+                  const parsed = parseGroup(await textCall(groupPrompt(e, g), `생성 · ${g.id}`), g, e);
+                  const check = checkAnswers(
+                    await textCall(solvePrompt(e, parsed), `정답 확인 · ${g.id}`, true),
+                    parsed,
+                  );
                   if (!check.ok) throw Object.assign(Error(check.reason), { verify: true });
                   Object.assign(g, parsed);
                 }
@@ -1058,11 +1191,13 @@ export async function buildServer({
                 log("info", `목소리 ${voice} 차례 (${todo.filter((t) => t.voice === voice).length}개 문장)`);
               lastVoice = voice;
               log("info", `음원 ${s.id} · ${voice} · ${args.model} · "${s.text.slice(0, 80)}"`);
+              const liveStarted = Date.now();
               const result = await verifiedNarration(
                 speak,
                 { ...args, prompt: s.text, voice, signal },
                 narrationChecks(args.provider, signal),
               );
+              addStats(e, "live", { segments: 1, takes: result.attempts, ms: Date.now() - liveStarted });
               await store.saveAudio(e, s, result);
               Object.assign(s, {
                 provider: args.provider,
@@ -1076,7 +1211,10 @@ export async function buildServer({
               });
               delete s.lastTake;
               await store.write(e);
-              log("ok", `음원 ${s.id} 완료 (${result.attempts}회, ${s.duration?.toFixed?.(2)}s)`);
+              log(
+                "ok",
+                `음원 ${s.id} 완료 (${result.attempts}회, 길이 ${s.duration?.toFixed?.(2)}s, 걸린 시간 ${((Date.now() - liveStarted) / 1000).toFixed(1)}s)`,
+              );
             } catch (err) {
               log(
                 "error",
@@ -1159,7 +1297,7 @@ export async function buildServer({
     if (autoConnect) void refreshConnections();
     if (autoUpdate && settings.autoUpdate) void performUpdate();
   });
-  server.requestTimeout = 310000;
+  server.requestTimeout = 910000;
   server.on("close", () => geminiPool?.closeAll());
   return { server, store };
 }

@@ -26,6 +26,15 @@ export async function render(page, { go }) {
     saved: "사진 문항 엔진을 저장했습니다.",
   });
 
+  const light = engineCard(settings, {
+    iconName: "refresh",
+    title: "가벼운 작업 엔진",
+    desc: "Part 2·5 문항 생성과 모든 정답 확인(다시 풀어 보기)에 씁니다. 작은 모델·low로 두면 Codex 사용량이 크게 줄어요. ‘Codex 기본 모델’은 문항 생성 엔진과 같은 모델을 뜻합니다.",
+    modelKey: "lightModel",
+    effortKey: "lightEffort",
+    saved: "가벼운 작업 엔진을 저장했습니다.",
+  });
+
   // ── Codex ──────────────────────────────────────────────────────────────
   const auto = h("input", {
     type: "checkbox",
@@ -347,7 +356,7 @@ export async function render(page, { go }) {
     h(
       "div",
       { class: "settings-grid" },
-      h("div", { class: "stack" }, generation.card, vision.card, codex, checks),
+      h("div", { class: "stack" }, generation.card, light.card, vision.card, codex, checks),
       h("div", { class: "stack" }, appearance, live, update, about),
     ),
   );
@@ -482,7 +491,7 @@ function engineCard(settings, { iconName, title, desc, modelKey, effortKey, save
     const known = models.some((m) => m.id === current);
     list = select(
       [
-        ["", "Codex 기본 모델"],
+        ["", modelKey === "lightModel" ? "문항 생성 엔진과 같은 모델" : "Codex 기본 모델"],
         ...models.map((m) => [m.id, m.label === m.id ? m.id : `${m.label} · ${m.id}`]),
         ["__manual", "직접 입력…"],
       ],

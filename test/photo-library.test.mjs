@@ -166,15 +166,37 @@ test("TOEIC Part 1 uses bundled photos, swaps a photo that fails validation and 
   assert.equal(new Set(ready.groups.map((g) => g.photoHash)).size, 2);
 });
 
-test("text groups are re-solved by a separate call and regenerated when the key does not match", async (t) => {
+test("text groups are re-solved by a separate call; only a disputed question is rewritten and checked again", async (t) => {
   const { root, dir } = await library(t, []);
   const updater = { status: async () => ({ supported: false }), executable: async () => null };
+  const calls = [];
   let solves = 0;
-  const generate = async ({ prompt }) => {
+  const generate = async ({ prompt, effort }) => {
+    if (prompt.includes("failed an independent check")) {
+      calls.push("repair");
+      assert.match(prompt, /index 0: The report was _____ by Friday\./);
+      return JSON.stringify({
+        sets: [
+          {
+            questions: [
+              {
+                index: 0,
+                question: "The report must be _____ by Friday.",
+                choices: ["complete", "completed", "completing", "completes"],
+                answer: 1,
+                explanation: "수동태",
+              },
+            ],
+          },
+        ],
+      });
+    }
     if (prompt.includes("independently checking")) {
+      calls.push(`solve:${effort}`);
       assert.equal(prompt.includes("explanation"), false);
       return JSON.stringify({ answers: [solves++ === 0 ? 2 : 1] });
     }
+    calls.push("make");
     return JSON.stringify({
       questions: [
         {
@@ -211,12 +233,12 @@ test("text groups are re-solved by a separate call and regenerated when the key 
       })
     ).json();
   const e = await post("episodes", { exam: "toeic", counts: { 5: 1 } });
-  let r = await post("produce", { id: e.id });
-  assert.equal(r.episode.groups[0].status, "pending");
-  assert.match(r.episode.groups[0].lastError, /정답 불일치/);
-  r = await post("produce", { id: e.id });
+  const r = await post("produce", { id: e.id });
+  assert.deepEqual(calls, ["make", "solve:low", "repair", "solve:low"]);
   assert.equal(r.episode.groups[0].status, "ready");
-  assert.equal(r.episode.groups[0].tries, 2);
+  assert.equal(r.episode.groups[0].tries, 1, "no full regeneration");
+  assert.equal(r.episode.groups[0].questions[0].question, "The report must be _____ by Friday.");
+  assert.ok(r.episode.stats.codex.calls === 4);
   // Release builds expose no test-only routes.
   assert.equal((await fetch(`${base}/api/listening/${e.id}.wav`)).status, 404);
   assert.equal((await post("episodes/swap-photo", { id: e.id, groupId: "p5-1" })).error, "API 없음");

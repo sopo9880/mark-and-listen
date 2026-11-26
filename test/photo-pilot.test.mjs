@@ -119,12 +119,12 @@ test("six-photo pilot imports, independently rejects bad questions, retries audi
       assert.ok(jpgs.some((j) => j.equals(args.images[0])));
       assert.equal(args.prompt.includes(".jpg"), false);
       pictures++;
+      assert.equal(args.images.length, 1, "each call sends only the photo being checked");
       if (pictures % 2) return JSON.stringify({ choices: statements, answer: 0 });
       return JSON.stringify({
         labels:
           verdict === "multiple" ? ["true", "true", "false", "false"] : ["true", "false", "false", "false"],
         ambiguous: verdict === "ambiguous",
-        duplicate: verdict === "duplicate",
         evidence: "모의 검증",
       });
     },
@@ -195,7 +195,7 @@ test("six-photo pilot imports, independently rejects bad questions, retries audi
   assert.equal(created.status, 200);
   const { id } = created.data;
   // Rejected photo items are retried internally and fail only after three tries.
-  for (const invalid of ["ambiguous", "multiple", "duplicate"]) {
+  for (const invalid of ["ambiguous", "multiple", "ambiguous"]) {
     verdict = invalid;
     assert.equal((await request("produce", { id })).status, 200);
   }

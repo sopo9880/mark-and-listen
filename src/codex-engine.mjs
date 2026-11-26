@@ -50,7 +50,9 @@ export async function generateWithCodex({
   images = [],
   signal,
   runCommand = run,
+  onUsage,
 }) {
+  const started = Date.now();
   let scratch;
   try {
     scratch = await mkdtemp(join(tmpdir(), "mark-listen-codex-"));
@@ -103,7 +105,17 @@ export async function generateWithCodex({
         continue;
       }
       if (event.type === "item.completed" && event.item?.type === "agent_message") text = event.item.text;
-      if (event.type === "turn.completed") completed = true;
+      if (event.type === "turn.completed") {
+        completed = true;
+        // Token usage of this call (input, cached input, output incl. reasoning) for the developer log.
+        const u = event.usage ?? {};
+        onUsage?.({
+          input: Number(u.input_tokens) || 0,
+          cached: Number(u.cached_input_tokens) || 0,
+          output: (Number(u.output_tokens) || 0) + (Number(u.reasoning_output_tokens) || 0),
+          ms: Date.now() - started,
+        });
+      }
     }
     if (!text || !completed) throw Error("Codex가 완료된 문항을 반환하지 않았어요.");
     return text;
