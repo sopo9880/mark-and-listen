@@ -150,7 +150,8 @@ jobs:
       - name: Smoke-test the app bundle
         shell: bash
         run: |
-          set -euo pipefail
+          set -euxo pipefail
+          ls src-tauri/target/${{ matrix.target }}/release/bundle/*
           app="$(find "src-tauri/target/${{ matrix.target }}/release/bundle/macos" -maxdepth 1 -name '*.app' | head -n1)"
           res="$app/Contents/Resources"
           test -x "$res/runtime/node"
