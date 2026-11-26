@@ -29,7 +29,7 @@ export async function render(page, { go }) {
   const light = engineCard(settings, {
     iconName: "refresh",
     title: "가벼운 작업 엔진",
-    desc: "Part 2·5 문항 생성과 모든 정답 확인(다시 풀어 보기)에 씁니다. 작은 모델·low로 두면 Codex 사용량이 크게 줄어요. ‘Codex 기본 모델’은 문항 생성 엔진과 같은 모델을 뜻합니다.",
+    desc: "Part 2·5 문항 생성과 모든 정답 확인(다시 풀어 보기)에 씁니다. 작은 모델·low로 두면 Codex 사용량이 크게 줄어요.",
     modelKey: "lightModel",
     effortKey: "lightEffort",
     saved: "가벼운 작업 엔진을 저장했습니다.",
