@@ -47,7 +47,10 @@ fn main() {
         })
         .setup(|app| {
             let resources = app.path().resource_dir()?;
+            #[cfg(windows)]
             let runtime = resources.join("runtime/node.exe");
+            #[cfg(not(windows))]
+            let runtime = resources.join("runtime/node");
             let entry = "app/src/main.mjs";
             for file in [&runtime, &resources.join(entry)] {
                 if !file.is_file() {
@@ -124,6 +127,11 @@ fn main() {
         }
     };
     app.run(|app, event| {
+        // macOS: clicking the Dock icon brings back the window that closing only hid.
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Reopen { .. } = event {
+            show_main(app);
+        }
         if matches!(event, tauri::RunEvent::Exit) {
             if let Some(backend) = app.try_state::<Backend>() {
                 if let Ok(mut child) = backend.0.lock() {

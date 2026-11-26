@@ -1,4 +1,22 @@
-import { buildServer } from "./server.mjs";
+import { dirname, join } from "node:path";
+import { homedir } from "node:os";
+
+// Apps started from the macOS Dock get a minimal PATH. Codex installed with Homebrew or npm (and the `node` its
+// launcher needs) live in these folders; the bundled Node runtime is added too.
+if (process.platform === "darwin") {
+  const extra = [
+    dirname(process.execPath),
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    join(homedir(), ".local", "bin"),
+    join(homedir(), ".npm-global", "bin"),
+    join(homedir(), ".volta", "bin"),
+  ];
+  const parts = (process.env.PATH ?? "").split(":").filter(Boolean);
+  process.env.PATH = [...parts, ...extra.filter((p) => !parts.includes(p))].join(":");
+}
+
+const { buildServer } = await import("./server.mjs");
 
 const smoke = process.env.MARK_LISTEN_SMOKE === "1";
 const preferred = Number(process.env.PORT ?? 4173);

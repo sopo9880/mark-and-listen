@@ -7,6 +7,10 @@ on:
         description: Publish this build as a test prerelease (vX.Y.Z.W-rc.N, ignored by the in-app updater)
         type: boolean
         default: false
+      macos_attach_to:
+        description: Build macOS DMGs of this ref and attach them to this existing test prerelease tag (e.g. v0.2.0.0-rc.38); skips the Windows build
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -33,6 +37,7 @@ jobs:
   windows:
     # Unsigned build + installed-app smoke test. Releases are signed only by release-beta-win64.yml on main.
     needs: test
+    if: github.event_name != 'workflow_dispatch' || inputs.macos_attach_to == ''
     runs-on: windows-latest
     timeout-minutes: 40
     steps:
@@ -99,3 +104,98 @@ jobs:
           gh release create "$tag" dist/*.exe dist/SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
             --title "Mark & Listen ${version} 테스트 (rc.${GITHUB_RUN_NUMBER})" --notes-file notes.md
+
+  macos:
+    # Optional: macOS DMGs for an existing test prerelease (Actions › CI › Run workflow › macos_attach_to).
+    if: github.event_name == 'workflow_dispatch' && inputs.macos_attach_to != ''
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            target: aarch64-apple-darwin
+            label: Apple-Silicon
+          - arch: x64
+            target: x86_64-apple-darwin
+            label: Intel
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.22.3'
+      - name: Build the DMG (unsigned, ad-hoc code signature)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          ./scripts/prepare-macos.sh "${{ matrix.arch }}"
+          rustup target add "${{ matrix.target }}"
+          # macOS icons from the app logo (upscaled for the .icns sizes).
+          sips -z 1024 1024 public/logo.png --out "$RUNNER_TEMP/logo-1024.png" >/dev/null
+          npx tauri icon "$RUNNER_TEMP/logo-1024.png" -o src-tauri/icons
+          cat > "$RUNNER_TEMP/macos.json" <<'JSON'
+          {
+            "bundle": {
+              "targets": ["dmg"],
+              "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns"],
+              "macOS": { "signingIdentity": "-", "minimumSystemVersion": "11.0" }
+            }
+          }
+          JSON
+          npx tauri build --target "${{ matrix.target }}" --bundles dmg --config "$RUNNER_TEMP/macos.json"
+      - name: Smoke-test the app bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="$(find "src-tauri/target/${{ matrix.target }}/release/bundle/macos" -maxdepth 1 -name '*.app' | head -n1)"
+          res="$app/Contents/Resources"
+          test -x "$res/runtime/node"
+          test -f "$res/app/src/main.mjs"
+          count="$(find "$res/app/assets/directions" -name '*.wav' | wc -l | tr -d ' ')"
+          [ "$count" = "39" ] || { echo "Expected 39 direction clips, found $count"; exit 1; }
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            # The runner is Apple Silicon: actually start the bundled backend and ask it for a session.
+            (cd "$res" && PORT=0 "$res/runtime/node" app/src/main.mjs > "$RUNNER_TEMP/backend.log" 2>&1 &)
+            for i in $(seq 1 30); do grep -q MARK_READY "$RUNNER_TEMP/backend.log" && break; sleep 1; done
+            port="$(sed -n 's/^MARK_READY://p' "$RUNNER_TEMP/backend.log" | head -n1)"
+            curl -fsS "http://127.0.0.1:$port/api/session" | grep -q '"token"'
+            pkill -f "app/src/main.mjs" || true
+          else
+            file "$res/runtime/node" | grep -q x86_64
+          fi
+          codesign -dv "$app" 2>&1 | grep -q "Signature=adhoc"
+          version="$(node -p "require('./package.json').displayVersion")"
+          mkdir -p dist
+          dmg="$(find "src-tauri/target/${{ matrix.target }}/release/bundle/dmg" -name '*.dmg' | head -n1)"
+          cp "$dmg" "dist/Mark-and-Listen-${version}-ci-unsigned-macOS-${{ matrix.label }}.dmg"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ci-macos-${{ matrix.arch }}-unsigned
+          path: dist/
+          retention-days: 7
+
+  macos-attach:
+    needs: macos
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: ci-macos-*
+          merge-multiple: true
+          path: dist
+      - name: Attach DMGs to the prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.macos_attach_to }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9.]+-rc\.[0-9]+$ ]] || { echo "Only test prerelease tags"; exit 1; }
+          (cd dist && shasum -a 256 *.dmg > SHA256SUMS-macOS.txt)
+          gh release upload "$TAG" dist/*.dmg dist/SHA256SUMS-macOS.txt --clobber --repo "$GITHUB_REPOSITORY"
