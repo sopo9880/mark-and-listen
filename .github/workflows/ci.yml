@@ -160,7 +160,7 @@ jobs:
           [ "$count" = "39" ] || { echo "Expected 39 direction clips, found $count"; exit 1; }
           if [ "${{ matrix.arch }}" = "arm64" ]; then
             # The runner is Apple Silicon: actually start the bundled backend and ask it for a session.
-            (cd "$res" && PORT=0 "$res/runtime/node" app/src/main.mjs > "$RUNNER_TEMP/backend.log" 2>&1 &)
+            (cd "$res" && PORT=0 ./runtime/node app/src/main.mjs > "$RUNNER_TEMP/backend.log" 2>&1 &)
             for i in $(seq 1 120); do grep -q MARK_READY "$RUNNER_TEMP/backend.log" && break; sleep 1; done
             cat "$RUNNER_TEMP/backend.log"
             port="$(sed -n 's/^MARK_READY://p' "$RUNNER_TEMP/backend.log" | head -n1)"
