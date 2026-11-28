@@ -8,12 +8,15 @@ import {
   cbtBlueprint,
   phaseDurations,
   visibleExams,
+  jlptBlueprint,
 } from "../lib/exams.mjs";
+import { JLPT_LEVELS, jlptMondai, jlptSections } from "../lib/jlpt.mjs";
 import { fmtMinutes } from "./dom.mjs";
 
 export async function render(page, { params, go }) {
   const which = params[0];
   if (which === "toeic") return toeicForm(page, go);
+  if (which === "jlpt") return jlptForm(page, go);
   if (which === "cbt" && (!EXAMS.cbt.hidden || state.testMode)) return cbtForm(page, go);
   page.append(
     h(
@@ -44,17 +47,23 @@ export async function render(page, { params, go }) {
           h(
             "ul",
             { class: "hall-points" },
-            ...(x.id === "toeic"
+            ...(x.id === "jlpt"
               ? [
-                  "LC 45분 → RC 75분 실전 타이머",
-                  "Gemini / GPT Live 낭독 + 전사 자동 대조",
-                  "실전 OMR 마킹 · 파트별 정답률",
+                  "N1–N5 실제 問題 구성 · 영역별 시간",
+                  "청해 Live 낭독 · 그림 선택지 200장 내장",
+                  "후리가나 · 영역별 추정 점수와 기준점",
                 ]
-              : [
-                  "기사 필기 프리셋 · 과목 직접 구성",
-                  "과목별 40점 과락 · 평균 60점 판정",
-                  "4지·5지선다 · 한국어 해설",
-                ]
+              : x.id === "toeic"
+                ? [
+                    "LC 45분 → RC 75분 실전 타이머",
+                    "Gemini / GPT Live 낭독 + 전사 자동 대조",
+                    "실전 OMR 마킹 · 파트별 정답률",
+                  ]
+                : [
+                    "기사 필기 프리셋 · 과목 직접 구성",
+                    "과목별 40점 과락 · 평균 60점 판정",
+                    "4지·5지선다 · 한국어 해설",
+                  ]
             ).map((t) => h("li", {}, icon("check", 15), t)),
           ),
           h("span", { class: "btn btn-primary" }, h("span", { text: "입장하기" }), icon("arrow", 16)),
@@ -279,6 +288,152 @@ function labs(go) {
       button("전체 LC 100문항", () => fixed({ 1: 6, 2: 25, 3: 39, 4: 30 }, "고정 대본 · 전체 LC")),
     ),
   );
+}
+
+function jlptForm(page, go) {
+  let level = "N3",
+    scope = "full";
+  const picked = new Set();
+  const title = h("input", { class: "input", type: "text", maxLength: 100 });
+  const levelArea = h("div");
+  const scopeArea = h("div");
+  const partArea = h("div");
+  const summary = h("div", { class: "summary" });
+  const dateLabel = new Date().toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" });
+
+  const chosenParts = () => {
+    const all = jlptMondai(level);
+    if (scope === "full") return null;
+    if (scope === "pick") return all.filter((m) => picked.has(m.part)).map((m) => m.part);
+    return all.filter((m) => m.section === scope).map((m) => m.part);
+  };
+
+  const apply = () => {
+    const sections = jlptSections(level);
+    title.value = `JLPT ${level} ${scope === "full" ? "모의고사" : scope === "pick" ? "유형 연습" : (sections[scope]?.label ?? "")} ${dateLabel}`;
+    levelArea.replaceChildren(
+      segmented(
+        JLPT_LEVELS.map((l) => [l, l]),
+        level,
+        (v) => ((level = v), (scope = "full"), picked.clear(), apply()),
+      ),
+    );
+    scopeArea.replaceChildren(
+      segmented(
+        [
+          ["full", "전체"],
+          ...Object.entries(sections).map(([id, sec]) => [id, sec.label]),
+          ["pick", "유형 선택"],
+        ],
+        scope,
+        (v) => ((scope = v), apply()),
+      ),
+    );
+    const parts = chosenParts();
+    partArea.replaceChildren(
+      h(
+        "div",
+        { class: "part-picker" },
+        ...jlptMondai(level).map((m) => {
+          const on = scope === "pick" ? picked.has(m.part) : !parts || parts.includes(m.part);
+          return h(
+            scope === "pick" ? "button" : "div",
+            {
+              type: scope === "pick" ? "button" : null,
+              class: ["part-chip", scope !== "pick" && "static", on && "active"],
+              onclick:
+                scope === "pick"
+                  ? () => (picked.has(m.part) ? picked.delete(m.part) : picked.add(m.part), apply())
+                  : null,
+            },
+            h("strong", {
+              lang: "ja",
+              text: `${{ LK: "言語知識・読解", V: "文字・語彙", G: "文法・読解", L: "聴解" }[m.section]} 問題${m.no}`,
+            }),
+            h("small", { text: `${m.ko} · ${m.count}문항` }),
+          );
+        }),
+      ),
+    );
+    refresh();
+  };
+
+  const refresh = () => {
+    let groups = [],
+      error = "";
+    try {
+      const parts = chosenParts();
+      if (parts && !parts.length) throw Error("문제 유형을 하나 이상 선택하세요.");
+      groups = jlptBlueprint(level, parts);
+    } catch (e) {
+      error = e.message;
+    }
+    const e = { exam: "jlpt", config: { level }, groups };
+    const durations = groups.length ? phaseDurations(e) : {};
+    const sections = jlptSections(level);
+    const all = jlptMondai(level);
+    const countIn = (sid) =>
+      groups.filter((g) => all[g.part - 1].section === sid).reduce((n, g) => n + g.count, 0);
+    const listening = groups.filter((g) => all[g.part - 1].section === "L");
+    const segments = listening.reduce(
+      (n, g) => n + g.count * (g.kind === "quick" || g.kind === "utterance" ? 3 : 7),
+      0,
+    );
+    const pictures = groups.reduce((n, g) => n + (g.pictureItems ?? 0), 0);
+    summary.replaceChildren(
+      h("h3", { text: "회차 요약" }),
+      line("총 문항", `${groups.reduce((n, g) => n + g.count, 0)}문항`),
+      ...Object.entries(sections).map(([sid, sec]) =>
+        line(sec.label, countIn(sid) ? `${countIn(sid)}문항 · ${fmtMinutes(durations[sid] ?? 0)}` : "없음"),
+      ),
+      line("AI 요청", `약 ${groups.length * 2}회 (출제 + 자동 검증)`),
+      pictures ? line("청해 그림", `내장 그림 ${pictures}장 자동 배정`) : null,
+      line("Live 낭독 구간", listening.length ? `약 ${segments}개` : "없음"),
+      error ? h("p", { class: "error-text", text: error }) : null,
+      h("p", {
+        class: "muted small",
+        text: "연습용 창작 문항이며 공식 JLPT와 무관합니다. 결과는 정답 수로 계산한 추정 점수(영역별 기준점·합격선 적용)입니다.",
+      }),
+      button(
+        "회차 만들기",
+        async () => {
+          const created = await api("episodes", {
+            exam: "jlpt",
+            config: { level, parts: chosenParts() },
+            title: title.value,
+          });
+          toast("회차를 만들었어요. 문항 생성을 시작합니다.", "ok");
+          go("episode/" + created.id);
+          production.start(created.id).catch((err) => toastError(err));
+        },
+        { kind: "primary", iconName: "plus", disabled: !!error },
+      ),
+    );
+  };
+
+  page.append(
+    header(
+      "JLPT관",
+      "레벨을 고르면 그 레벨의 問題 구성·문항 수·시간을 따라 회차를 만듭니다. 청해는 問題마다 안내 방송과 N番 순서로 재생됩니다.",
+    ),
+    h(
+      "div",
+      { class: "form-layout" },
+      h(
+        "div",
+        { class: "stack" },
+        card(
+          {},
+          field("회차 이름", title),
+          field("레벨", levelArea),
+          field("출제 범위", scopeArea),
+          partArea,
+        ),
+      ),
+      h("aside", { class: "card sticky" }, summary),
+    ),
+  );
+  apply();
 }
 
 function cbtForm(page, go) {

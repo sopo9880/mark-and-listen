@@ -316,7 +316,87 @@ function forgiveLabels(ops) {
   return { ops: out, labels: { heard, unconfirmed } };
 }
 
+const JA = /[\u3040-\u30ff\u3400-\u9fff]/;
+export const isJapanese = (s) => JA.test(String(s ?? ""));
+const KANJI_DIGITS = {
+  〇: "0",
+  一: "1",
+  二: "2",
+  三: "3",
+  四: "4",
+  五: "5",
+  六: "6",
+  七: "7",
+  八: "8",
+  九: "9",
+};
+
+/** Japanese script → comparable characters: width/case folded, katakana as hiragana, no punctuation or spaces. */
+export function jaChars(value = "") {
+  return [
+    ...String(value)
+      .normalize("NFKC")
+      .toLowerCase()
+      .replace(/(^|\n)\s*[1-4][.)．、]\s*/g, "$1") // spoken option numbers
+      .replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60))
+      .replace(/[〇一二三四五六七八九]/g, (c) => KANJI_DIGITS[c])
+      .replace(/[^\p{L}\p{N}]/gu, ""),
+  ];
+}
+
+/**
+ * Japanese narration check. A transcript may write the same words with other kanji/kana choices, so this is a
+ * character alignment with tolerance: most script characters must be heard in order and little may be added.
+ */
+const ITEM_NO = /^\s*\d+\s*番[。、.]?/;
+const HEARD_NO =
+  /^\s*(?:(?:\d+|[〇一二三四五六七八九十]+)\s*番|(?:いち|に|さん|よん|ご|ろく|なな|しち|はち|きゅう|く|じゅう){1,3}ばん)[。、.]?/;
+const NEGATION = /ません|ない|なかっ|ず[、。に]|ぬ/g;
+
+export function japaneseDiff(expected, actual) {
+  // "3番" may be heard as "さんばん": the item number is checked by length only.
+  const numbered = ITEM_NO.test(expected);
+  let said = String(actual ?? "");
+  if (numbered) said = said.replace(HEARD_NO, "");
+  // Spoken option numbers ("1. …" heard as "いち、…") are not part of the comparison.
+  if (/(^|\n)\s*[1-4][.)．]/.test(expected))
+    said = said.replace(/(^|[。．.、\n\s])(?:いち|に|さん|よん|[1-4一二三四])[、。．.,\s]/g, "$1");
+  const want = jaChars(numbered ? String(expected).replace(ITEM_NO, "") : expected),
+    heard = jaChars(said);
+  if (!want.length && numbered)
+    return {
+      exact: heard.length <= 8,
+      japanese: true,
+      recall: 1,
+      missing: [],
+      added: heard,
+      ops: [],
+      labels: { heard: 0, unconfirmed: 0 },
+    };
+  const ops = align(want, heard);
+  const missing = ops.flatMap((h) => h.missing ?? []);
+  const added = ops.flatMap((h) => h.added ?? []);
+  const matched = want.length - missing.length;
+  const recall = want.length ? matched / want.length : 0;
+  const extra = heard.length ? added.length / heard.length : 1;
+  return {
+    // A changed negation flips the meaning even when most characters match.
+    exact:
+      want.length > 0 &&
+      recall >= 0.8 &&
+      extra <= 0.25 &&
+      (String(expected).match(NEGATION) ?? []).length === (String(actual ?? "").match(NEGATION) ?? []).length,
+    japanese: true,
+    recall: Math.round(recall * 100) / 100,
+    missing: missing.length > 40 ? [...missing.slice(0, 40), "…"] : missing,
+    added: added.length > 40 ? [...added.slice(0, 40), "…"] : added,
+    ops: ops.filter((h) => h.type !== "equal"),
+    labels: { heard: 0, unconfirmed: 0 },
+  };
+}
+
 export function transcriptDiff(expected, actual) {
+  if (isJapanese(expected)) return japaneseDiff(expected, actual);
   const script = String(expected ?? "").replace(/(^|\n)[ \t]*\(?([A-Ea-e])[.)][ \t]+/g, "$1§$2 ");
   const want = narrationTokens(script);
   const heard = narrationTokens(actual);

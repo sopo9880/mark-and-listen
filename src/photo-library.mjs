@@ -88,8 +88,9 @@ export class PhotoLibrary {
    * Picks `count` photos: least-used first (ties shuffled), never two variants of one scene together.
    * `usage` maps sha256 → number of episodes that already used the photo; `avoid` lists photos already in the episode.
    */
-  async pick(count, usage = new Map(), random = Math.random, avoid = []) {
+  async pick(count, usage = new Map(), random = Math.random, avoid = [], kind = null) {
     const photos = (await this.list())
+      .filter((p) => !kind || p.kind === kind)
       .filter((p) => !avoid.some((a) => a.sha256 === p.sha256))
       .map((p) => ({ p, used: usage.get(p.sha256) ?? 0, r: random() }))
       .sort((a, b) => a.used - b.used || a.r - b.r)
@@ -101,7 +102,11 @@ export class PhotoLibrary {
       chosen.push(p);
     }
     if (chosen.length < count)
-      throw Error(`Part 1에 쓸 수 있는 서로 다른 장면의 사진이 부족합니다. (${chosen.length}/${count}장)`);
+      throw Error(
+        kind
+          ? `서로 다른 그림이 부족합니다. (${chosen.length}/${count}장)`
+          : `Part 1에 쓸 수 있는 서로 다른 장면의 사진이 부족합니다. (${chosen.length}/${count}장)`,
+      );
     return chosen;
   }
 }

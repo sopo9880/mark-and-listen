@@ -3,7 +3,8 @@
 import { h, icon } from "./dom.mjs";
 import { loadEpisode } from "./api.mjs";
 import { examOf, sectionOf, isAudioGroup, PAPER_DIRECTIONS, questionNumbers } from "../lib/exams.mjs";
-import { groupMaterial } from "./material.mjs";
+import { groupMaterial, richText, questionFigure } from "./material.mjs";
+import { JLPT_DIRECTIONS } from "../lib/jlpt.mjs";
 import { choiceMark } from "./model.mjs";
 
 const KINDS = { paper: "시험지", omr: "답안지", key: "정답·해설·대본" };
@@ -14,6 +15,7 @@ export async function render(page, { params }) {
   const exam = examOf(e);
   const numbers = questionNumbers(e);
   const toeic = e.exam === "toeic";
+  const ja = e.exam === "jlpt";
   document.body.classList.add("print-mode");
   page.classList.add("print-page");
 
@@ -54,7 +56,9 @@ export async function render(page, { params }) {
         "header",
         { class: "print-cover" },
         h("h1", { text: e.title }),
-        h("p", { text: toeic ? "Practice Test · Test Book" : "문제지" }),
+        h("p", {
+          text: toeic ? "Practice Test · Test Book" : ja ? `${exam.level} 模擬試験 · 問題用紙` : "문제지",
+        }),
       ),
     );
     for (const [sid] of sections) {
@@ -70,13 +74,55 @@ export async function render(page, { params }) {
           sec.append(
             h("h3", {
               class: "part-title",
-              text: toeic ? `PART ${g.part}` : (exam.parts?.[g.part]?.label ?? `Part ${g.part}`),
+              text: toeic
+                ? `PART ${g.part}`
+                : ja
+                  ? `問題${exam.parts[g.part].no}`
+                  : (exam.parts?.[g.part]?.label ?? `Part ${g.part}`),
             }),
             toeic ? h("p", { class: "part-directions", text: PAPER_DIRECTIONS[g.part] }) : null,
+            ja
+              ? h("p", {
+                  class: "part-directions",
+                  lang: "ja",
+                  text: JLPT_DIRECTIONS[exam.parts[g.part].kind],
+                })
+              : null,
           );
         }
-        const block = h("div", { class: "q-group print-group" }, ...groupMaterial(g));
+        const block = h(
+          "div",
+          { class: "q-group print-group", lang: ja ? "ja" : null },
+          ...groupMaterial(g, { ja }),
+        );
         for (const q of g.questions) {
+          if (ja && sid === "L") {
+            // As on the real paper: number, the picture, and options only where they are printed.
+            const p = exam.parts[g.part];
+            const printed = p.print === "text" && q.image?.kind !== "grid";
+            block.append(
+              h(
+                "div",
+                { class: "question" },
+                h(
+                  "p",
+                  { class: "q-text" },
+                  h("span", { class: "q-num ja-num", text: `${numbers.get(q.id)}番` }),
+                ),
+                questionFigure(e, q),
+                printed
+                  ? h(
+                      "ol",
+                      { class: "choices" },
+                      ...q.choices.map((c, i) =>
+                        h("li", {}, h("span", { class: "mark", text: `${i + 1}` }), h("span", { text: c })),
+                      ),
+                    )
+                  : null,
+              ),
+            );
+            continue;
+          }
           const listenOnly = toeic && q.part <= 2;
           block.append(
             h(
@@ -86,7 +132,7 @@ export async function render(page, { params }) {
                 "p",
                 { class: "q-text" },
                 h("span", { class: "q-num", text: numbers.get(q.id) }),
-                listenOnly ? "Mark your answer on your answer sheet." : q.question,
+                listenOnly ? "Mark your answer on your answer sheet." : richText(q.question, ja),
               ),
               listenOnly
                 ? null
@@ -98,7 +144,7 @@ export async function render(page, { params }) {
                         "li",
                         {},
                         h("span", { class: "mark", text: `(${choiceMark(e, i)})` }),
-                        h("span", { text: c }),
+                        h("span", {}, ...richText(c, ja)),
                       ),
                     ),
                   ),

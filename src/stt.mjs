@@ -1,7 +1,7 @@
 // Independent speech-to-text used to verify narration. The Live session's own transcript describes what the
 // model meant to say, not necessarily what ended up in the saved audio, so every saved clip is transcribed
 // again from its WAV bytes and compared with the script.
-import { narrationTokens } from "./narration.mjs";
+import { narrationTokens, isJapanese, jaChars } from "./narration.mjs";
 
 const GEMINI = "https://generativelanguage.googleapis.com/v1beta/models";
 const INSTRUCTION =
@@ -136,6 +136,22 @@ async function openaiTranscribe({ apiKey, wav, model, fetcher, signal }) {
  * too long (extra talk). Bounds: 4.2 words/s at most, 1.1 words/s at least, plus slack for pauses.
  */
 export function plausibleDuration(script, seconds) {
+  if (isJapanese(script)) {
+    // Japanese: about 5–9 characters a second in exam narration; kanji carry more sound, so the range is wide.
+    const chars = jaChars(script).length;
+    if (!chars) return { ok: false, words: 0, reason: "빈 대본" };
+    const min = Math.max(0.4, chars / 14) * 0.8;
+    const max = chars / 2.2 + 4;
+    if (seconds < min)
+      return {
+        ok: false,
+        words: chars,
+        reason: `음원이 너무 짧습니다 (${seconds.toFixed(1)}초, ${chars}자)`,
+      };
+    if (seconds > max)
+      return { ok: false, words: chars, reason: `음원이 너무 깁니다 (${seconds.toFixed(1)}초, ${chars}자)` };
+    return { ok: true, words: chars };
+  }
   const words = narrationTokens(String(script).replace(/(^|\n)\s*\(?[A-Ea-e][.)]\s+/g, "$1")).length;
   if (!words) return { ok: false, words, reason: "빈 대본" };
   const min = Math.max(0.5, words / 4.2) * 0.8;

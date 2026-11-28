@@ -1,4 +1,4 @@
-import { groupMaterial } from "./material.mjs";
+import { groupMaterial, richText, questionFigure } from "./material.mjs";
 import { h, icon, card, chip, button, segmented, empty, fmtDate } from "./dom.mjs";
 import { api, loadLibrary } from "./api.mjs";
 import { partLabel, isAudioGroup } from "../lib/exams.mjs";
@@ -75,7 +75,7 @@ export async function render(page) {
                 },
               },
               h("span", { class: "mark", text: choiceMark(e, i) }),
-              h("span", { text: c }),
+              h("span", {}, ...richText(c, e.exam === "jlpt")),
             ),
           ),
         ),
@@ -103,7 +103,8 @@ export async function render(page) {
           ),
         ),
       ),
-      ...groupMaterial(g, { small: true, open: false }),
+      ...groupMaterial(g, { small: true, open: false, ja: e.exam === "jlpt" }),
+      e.exam === "jlpt" ? questionFigure(e, q, { small: true }) : null,
       isAudioGroup(e, g) && g.segments.length
         ? h(
             "details",
@@ -119,7 +120,11 @@ export async function render(page) {
             ),
           )
         : null,
-      h("p", { class: "q-text" }, q.question),
+      h(
+        "p",
+        { class: "q-text", lang: e.exam === "jlpt" ? "ja" : null },
+        ...richText(q.question, e.exam === "jlpt"),
+      ),
       choices,
       feedback,
       h(

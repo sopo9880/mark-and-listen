@@ -17,6 +17,8 @@ $unexpected = Get-ChildItem -LiteralPath $target -Recurse -File | Where-Object {
 }
 $directions = @(Get-ChildItem -LiteralPath (Join-Path $target 'app/assets/directions') -Filter *.wav -File)
 if ($directions.Count -ne 39) { throw "Expected 39 bundled direction clips, found $($directions.Count)" }
+$jlptImages = @(Get-ChildItem -LiteralPath (Join-Path $target 'app/assets/jlpt-images') -Filter *.jpg -File)
+if ($jlptImages.Count -ne 200) { throw "Expected 200 bundled JLPT illustrations, found $($jlptImages.Count)" }
 if ($unexpected) { throw 'Unexpected bundled runtime or sample audio' }
 $runtime = Join-Path $target 'runtime/node.exe'
 & $runtime --check (Join-Path $target 'app/src/main.mjs')

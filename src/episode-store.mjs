@@ -8,6 +8,7 @@ import {
   blueprint,
   cbtBlueprint,
   cbtConfig,
+  jlptBlueprint,
   migrateEpisode,
   questionsOf,
   isAudioGroup,
@@ -95,6 +96,12 @@ export class EpisodeStore {
     if (exam === "cbt") {
       cfg = cbtConfig(config);
       groups = cbtBlueprint(cfg);
+    } else if (exam === "jlpt") {
+      const level = config?.level;
+      if (!EXAMS.jlpt.levels.includes(level)) throw Error("JLPT 레벨(N1–N5)을 선택하세요.");
+      const parts = Array.isArray(config?.parts) ? config.parts.map(Number).filter(Number.isInteger) : null;
+      groups = jlptBlueprint(level, parts?.length ? parts : null);
+      cfg = { level };
     } else {
       groups = blueprint(exam, counts);
       cfg = {};
@@ -105,7 +112,7 @@ export class EpisodeStore {
       kind: "episode",
       schema: 2,
       exam,
-      fixed: fixed === true,
+      fixed: exam === "toeic" && fixed === true,
       title:
         String(title || "새 회차")
           .trim()

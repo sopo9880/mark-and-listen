@@ -1,5 +1,5 @@
 // View-model helpers shared by several screens.
-import { EXAMS, isAudioGroup, readyToTake, questionsOf, partLabel } from "../lib/exams.mjs";
+import { EXAMS, isAudioGroup, readyToTake, questionsOf, partLabel, partsOf } from "../lib/exams.mjs";
 import { advanceAttempt } from "../lib/attempt.mjs";
 
 export function progressOf(e) {
@@ -60,5 +60,9 @@ export { questionsOf, partLabel };
 export function partsSummary(e) {
   const seen = [...new Set(e.groups.map((g) => g.part))];
   if (e.exam === "toeic") return seen.length === 7 ? "Part 1–7 전체" : "Part " + seen.join(", ");
+  if (e.exam === "jlpt") {
+    const all = Object.keys(partsOf(e)).length;
+    return `${e.config?.level ?? ""} · ${seen.length === all ? "전체 問題" : `問題 ${seen.length}종`}`;
+  }
   return seen.map((p) => partLabel(e, p)).join(" · ");
 }

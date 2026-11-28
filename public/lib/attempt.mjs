@@ -26,6 +26,8 @@ export function startAttempt(e, now = Date.now(), { waiting = false } = {}) {
     phaseEndsAt: null,
     waiting: true,
     audioOffset: 0,
+    // A listening section after a paper section (JLPT) waits for its own "듣기 시작", like the break before it.
+    audioPhase: audioSection && order.indexOf(audioSection) > 0 ? audioSection : null,
     durations,
     marks: {},
     submittedAt: null,
@@ -38,7 +40,7 @@ export function beginAttempt(s, now = Date.now()) {
   return {
     ...s,
     waiting: false,
-    startedAt: now,
+    startedAt: s.startedAt ?? now,
     phaseStartedAt: now,
     phaseEndsAt: now + s.durations[s.phase],
   };
@@ -61,6 +63,8 @@ export function advanceAttempt(s, now = Date.now()) {
   while (s.phase !== "done" && now >= s.phaseEndsAt) {
     const order = orderOf(s);
     const next = order[order.indexOf(s.phase) + 1];
+    if (next && next === s.audioPhase)
+      return { ...s, phase: next, waiting: true, phaseStartedAt: null, phaseEndsAt: null };
     s = next
       ? { ...s, phase: next, phaseStartedAt: s.phaseEndsAt, phaseEndsAt: s.phaseEndsAt + s.durations[next] }
       : { ...s, phase: "done", phaseStartedAt: s.phaseEndsAt };

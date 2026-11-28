@@ -36,6 +36,7 @@ import { EpisodeStore, notebookEntries, validateWav } from "./episode-store.mjs"
 import { isAudioGroup, audioTimeline, isFullListening } from "../public/lib/exams.mjs";
 import { advanceAttempt, isOpen } from "../public/lib/attempt.mjs";
 import { groupPrompt, parseGroup, fixedGroup } from "./episode-content.mjs";
+import { jlptPrompt, parseJlptGroup, jlptSolvePrompt } from "./jlpt-content.mjs";
 import { createCodexUpdater } from "./codex-updater.mjs";
 import { generateWithCodex, codexLoginStatus, codexBrowserLogin } from "./codex-engine.mjs";
 import { generateWithProvider } from "./providers.mjs";
@@ -46,6 +47,7 @@ import { auditionWithOpenAILive } from "./openai-live.mjs";
 export const VERSION = APP_VERSION;
 const PUBLIC = fileURLToPath(new URL("../public/", import.meta.url));
 const BUNDLED_PHOTOS = fileURLToPath(new URL("../assets/part1-photos/", import.meta.url));
+const BUNDLED_JLPT = fileURLToPath(new URL("../assets/jlpt-images/", import.meta.url));
 const BUNDLED_DIRECTIONS = fileURLToPath(new URL("../assets/directions/", import.meta.url));
 const dataRoot = () =>
   process.env.MARK_LISTEN_DATA ||
@@ -168,6 +170,7 @@ export function voiceFor(provider, e, g, s) {
     const list = usable(gender);
     return list[(Math.floor(n / 2) + k) % list.length];
   };
+  if (/^[FM]2?$/.test(s.speaker ?? "")) return pick(s.speaker[0] === "F" ? "f" : "m", s.speaker.length - 1);
   if (s.speaker === "A") return pick(first, 0);
   if (s.speaker === "B") return pick(other, 0);
   return pick(first, 1); // C
@@ -176,6 +179,7 @@ export function voiceFor(provider, e, g, s) {
 export async function buildServer({
   root = dataRoot(),
   photoRoot = BUNDLED_PHOTOS,
+  jlptRoot = BUNDLED_JLPT,
   directionsRoot = BUNDLED_DIRECTIONS,
   testMode = TEST_MODE,
   stt,
@@ -194,6 +198,26 @@ export async function buildServer({
   let appUpdating = false;
   const store = await new EpisodeStore(join(root, "episodes")).init();
   const photos = new PhotoLibrary(photoRoot);
+  const jlptImages = new PhotoLibrary(jlptRoot);
+  const jlptUsage = async () => {
+    const usage = new Map();
+    for (const e of await store.list())
+      for (const g of e.groups)
+        for (const p of g.pictures ?? []) usage.set(p.sha256, (usage.get(p.sha256) ?? 0) + 1);
+    return usage;
+  };
+  /** Assigns bundled JLPT illustrations to the listening items that need one (grid choices or arrow scenes). */
+  const assignJlptPictures = async (e) => {
+    const usage = await jlptUsage();
+    const chosen = [];
+    for (const g of e.groups) {
+      if (!g.pictureItems) continue;
+      const list = await jlptImages.pick(g.pictureItems, usage, Math.random, chosen, g.pictureKind);
+      chosen.push(...list);
+      g.pictures = list.map((p, i) => ({ item: i, sha256: p.sha256, kind: p.kind, name: p.name }));
+    }
+    return e;
+  };
   const photoUsage = async () => {
     const usage = new Map();
     for (const e of await store.list())
@@ -524,6 +548,17 @@ export async function buildServer({
         await stream(req, res, photoPath(store.root, photo[1], photo[2]), "image/jpeg");
         return;
       }
+      const jimg = /^\/api\/jlpt-image\/([0-9a-f-]{36})\/([a-z0-9-]{1,40})$/.exec(path);
+      if (jimg && ["GET", "HEAD"].includes(req.method)) {
+        // Shown only inside an episode (exam, review, print), never as a browsable library.
+        const e = await store.read(jimg[1]);
+        const q = e.groups.flatMap((g) => g.questions ?? []).find((x) => x.id === jimg[2]);
+        if (!q?.image?.sha256) throw fail(404, "그림 없음");
+        const bytes = await jlptImages.read(q.image.sha256);
+        res.writeHead(200, { "content-type": "image/jpeg", "cache-control": "private, max-age=86400" });
+        res.end(req.method === "HEAD" ? undefined : bytes);
+        return;
+      }
       const media = /^\/api\/media\/([a-zA-Z0-9-]+)\/([a-zA-Z0-9-]+)$/.exec(path);
       if (media && ["GET", "HEAD"].includes(req.method)) {
         await stream(req, res, await store.audio(media[1], media[2]), "audio/wav");
@@ -806,6 +841,14 @@ export async function buildServer({
               );
             }
             const e = await store.create(b);
+            if (e.exam === "jlpt" && e.groups.some((g) => g.pictureItems)) {
+              try {
+                await store.write(await assignJlptPictures(e));
+              } catch (err) {
+                await store.remove(e.id);
+                throw err;
+              }
+            }
             if (e.exam === "toeic" && e.groups.some((g) => isAudioGroup(e, g))) {
               const snapshot = await directions.snapshot();
               if (snapshot) {
@@ -1108,6 +1151,32 @@ export async function buildServer({
                             }),
                     }),
                   );
+                } else if (e.exam === "jlpt") {
+                  // One Codex call writes the group (with its illustrations attached), a light call solves it.
+                  const pics = g.pictures ?? [];
+                  const images = await Promise.all(pics.map((p) => jlptImages.read(p.sha256)));
+                  log(
+                    "info",
+                    `문항 생성 ${g.id} · ${g.kind} (시도 ${g.tries}${pics.length ? `, 그림 ${pics.length}장` : ""})`,
+                  );
+                  const raw = await codexCall({
+                    e,
+                    task: `생성 · ${g.id}`,
+                    prompt: jlptPrompt(e, g, pics),
+                    images: images.length ? images : undefined,
+                    model: images.length
+                      ? settings.visionModel || settings.textModel || undefined
+                      : undefined,
+                    effort: images.length ? settings.visionEffort || "medium" : undefined,
+                    signal,
+                  });
+                  const parsed = parseJlptGroup(raw, g, e, pics);
+                  const check = checkAnswers(
+                    await textCall(jlptSolvePrompt(e, parsed), `정답 확인 · ${g.id}`, true),
+                    parsed,
+                  );
+                  if (!check.ok) throw Object.assign(Error(check.reason), { verify: true });
+                  Object.assign(g, parsed);
                 } else if (e.fixed || b.fixed === true) {
                   Object.assign(g, fixedGroup(g));
                 } else {

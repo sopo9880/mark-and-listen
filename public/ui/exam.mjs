@@ -1,4 +1,5 @@
-import { groupMaterial } from "./material.mjs";
+import { groupMaterial, richText, questionFigure } from "./material.mjs";
+import { JLPT_DIRECTIONS } from "../lib/jlpt.mjs";
 import { h, icon, button, confirmDialog, toast, toastError, fmtClock } from "./dom.mjs";
 import { api, loadEpisode } from "./api.mjs";
 import {
@@ -8,6 +9,7 @@ import {
   sectionOf,
   PAPER_DIRECTIONS,
   questionNumbers,
+  partsOf,
 } from "../lib/exams.mjs";
 import { advanceAttempt, remainingSections, audioPosition } from "../lib/attempt.mjs";
 import { choiceMark } from "./model.mjs";
@@ -28,6 +30,7 @@ export async function render(page, { params, go }) {
     syncing = false,
     paintedPhase = null;
   const clickToMark = e.exam !== "toeic";
+  const ja = e.exam === "jlpt";
   const timeline = audioTimeline(e);
   const audio = h("audio", { hidden: true, preload: "auto" });
   const numbers = questionNumbers(e);
@@ -153,12 +156,23 @@ export async function render(page, { params, go }) {
             h("h2", { class: "part-title", text: `PART ${g.part}` }),
             h("p", { class: "part-directions", text: PAPER_DIRECTIONS[g.part] }),
           );
-        else paper.append(h("h2", { class: "part-title", text: partLabel(e, g.part) }));
+        else if (ja) {
+          // The JLPT paper is Japanese only: 問題 number and its instructions.
+          const p = partsOf(e)[g.part];
+          paper.append(
+            h("h2", { class: "part-title", lang: "ja", text: `問題${p.no}` }),
+            h("p", { class: "part-directions", lang: "ja", text: JLPT_DIRECTIONS[p.kind] ?? "" }),
+          );
+        } else paper.append(h("h2", { class: "part-title", text: partLabel(e, g.part) }));
       }
-      const block = h("div", { class: "q-group", dataset: { group: g.id } });
-      block.append(...groupMaterial(g));
+      const block = h("div", { class: "q-group", dataset: { group: g.id }, lang: ja ? "ja" : null });
+      block.append(...groupMaterial(g, { ja }));
       for (const q of g.questions) {
         const num = numbers.get(q.id);
+        if (ja && sectionOf(e, g) === "L") {
+          block.append(jlptListeningItem(q, num, partsOf(e)[g.part]));
+          continue;
+        }
         const listenOnly = e.exam === "toeic" && q.part <= 2;
         const qv = h(
           "div",
@@ -169,7 +183,7 @@ export async function render(page, { params, go }) {
             h("span", { class: "q-num", text: num }),
             listenOnly
               ? h("span", { class: "muted", text: "Mark your answer on your answer sheet." })
-              : q.question,
+              : richText(q.question, ja),
           ),
         );
         if (!listenOnly)
@@ -191,10 +205,15 @@ export async function render(page, { params, go }) {
                           onclick: () => mark(q, i),
                         },
                         h("span", { class: "mark", text: choiceMark(e, i) }),
-                        h("span", { text: c }),
+                        h("span", {}, ...richText(c, ja)),
                       ),
                     )
-                  : h("li", {}, h("span", { class: "mark", text: choiceMark(e, i) }), h("span", { text: c })),
+                  : h(
+                      "li",
+                      {},
+                      h("span", { class: "mark", text: choiceMark(e, i) }),
+                      h("span", {}, ...richText(c, ja)),
+                    ),
               ),
             ),
           );
@@ -202,6 +221,34 @@ export async function render(page, { params, go }) {
       }
       paper.append(block);
     }
+  }
+
+  /** A JLPT listening item: "N番", its picture if any, printed options only where the real paper prints them. */
+  function jlptListeningItem(q, num, p) {
+    const printed = p.print === "text" && q.image?.kind !== "grid";
+    const choice = (c, i) =>
+      h(
+        "li",
+        {},
+        h(
+          "button",
+          {
+            type: "button",
+            class: ["choice", !printed && "compact", s.marks[q.id] === i && "picked"],
+            dataset: { q: q.id, i },
+            onclick: () => mark(q, i),
+          },
+          h("span", { class: "mark", text: choiceMark(e, i) }),
+          printed ? h("span", {}, ...richText(c, true)) : null,
+        ),
+      );
+    return h(
+      "div",
+      { class: "question", id: "q-" + q.id },
+      h("p", { class: "q-text" }, h("span", { class: "q-num ja-num", text: `${num}番` })),
+      questionFigure(e, q),
+      h("ol", { class: ["choices", "clickable", !printed && "choices-row"] }, ...q.choices.map(choice)),
+    );
   }
 
   function drawOmr() {
@@ -217,30 +264,40 @@ export async function render(page, { params, go }) {
       h(
         "div",
         { class: "omr-grid" },
-        ...qs.map((q) => {
+        ...qs.flatMap((q, k) => {
           const num = numbers.get(q.id);
-          return h(
-            "div",
-            { class: ["omr-row", Object.hasOwn(s.marks, q.id) && "answered"] },
-            h("button", {
-              type: "button",
-              class: "omr-num",
-              text: num,
-              title: "문제로 이동",
-              onclick: () =>
-                document.getElementById("q-" + q.id)?.scrollIntoView({ behavior: "smooth", block: "center" }),
-            }),
-            ...q.choices.map((_, i) =>
+          // JLPT numbers restart per listening 問題: label each block on the answer sheet.
+          const head =
+            ja && q.part !== qs[k - 1]?.part
+              ? h("div", { class: "omr-part", lang: "ja", text: `問題${partsOf(e)[q.part].no}` })
+              : null;
+          return [
+            head,
+            h(
+              "div",
+              { class: ["omr-row", Object.hasOwn(s.marks, q.id) && "answered"] },
               h("button", {
                 type: "button",
-                class: ["bubble", s.marks[q.id] === i && "filled"],
-                "aria-label": `${num}번 ${choiceMark(e, i)}`,
-                "aria-pressed": String(s.marks[q.id] === i),
-                text: choiceMark(e, i),
-                onclick: () => mark(q, i),
+                class: "omr-num",
+                text: num,
+                title: "문제로 이동",
+                onclick: () =>
+                  document
+                    .getElementById("q-" + q.id)
+                    ?.scrollIntoView({ behavior: "smooth", block: "center" }),
               }),
+              ...q.choices.map((_, i) =>
+                h("button", {
+                  type: "button",
+                  class: ["bubble", s.marks[q.id] === i && "filled"],
+                  "aria-label": `${num}번 ${choiceMark(e, i)}`,
+                  "aria-pressed": String(s.marks[q.id] === i),
+                  text: choiceMark(e, i),
+                  onclick: () => mark(q, i),
+                }),
+              ),
             ),
-          );
+          ];
         }),
       ),
     );

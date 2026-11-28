@@ -2,7 +2,7 @@ import { h, icon, card, chip, progress, empty, fmtDate, fmtClock } from "./dom.m
 import { api, loadLibrary } from "./api.mjs";
 import { scoreBars } from "./lux-bars.mjs";
 import { studyHeatmap } from "./lux-heat.mjs";
-import { EXAMS, visibleExams } from "../lib/exams.mjs";
+import { visibleExams, examOf } from "../lib/exams.mjs";
 import {
   progressOf,
   openAttempt,
@@ -52,7 +52,7 @@ export async function render(page, { go }) {
       h("h1", { text: active ? "진행 중인 시험이 있어요" : greeting }),
       h("p", {
         text: active
-          ? `${active[0].title} · ${EXAMS[active[0].exam].sections[active[1].phase]?.label ?? active[1].phase} 영역 · ${active[1].waiting ? "시작 전" : `남은 시간 ${fmtClock(active[1].phaseEndsAt - Date.now())}`}`
+          ? `${active[0].title} · ${examOf(active[0]).sections[active[1].phase]?.label ?? active[1].phase} 영역 · ${active[1].waiting ? "시작 전" : `남은 시간 ${fmtClock(active[1].phaseEndsAt - Date.now())}`}`
           : "회차를 만들고, 실전처럼 풀고, 틀린 문제만 다시 봅니다. 완성된 회차는 인터넷 없이도 응시할 수 있어요.",
       }),
     ),
@@ -123,6 +123,11 @@ export async function render(page, { go }) {
       "토익",
       "TOEIC",
       results.filter((r) => r.e.exam === "toeic"),
+    ),
+    setOf(
+      "JLPT",
+      "JLPT",
+      results.filter((r) => r.e.exam === "jlpt"),
     ),
     setOf(
       "필기",

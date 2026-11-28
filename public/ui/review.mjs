@@ -1,4 +1,4 @@
-import { groupMaterial } from "./material.mjs";
+import { groupMaterial, richText, questionFigure } from "./material.mjs";
 import { h, icon, card, chip, progress, segmented, fmtDate, fmtClock, button } from "./dom.mjs";
 import { api, loadEpisode } from "./api.mjs";
 import { examOf, partLabel, isAudioGroup } from "../lib/exams.mjs";
@@ -17,6 +17,8 @@ export async function render(page, { params }) {
     return;
   }
   const result = scoreAttempt(e, a.marks);
+  const ja = e.exam === "jlpt";
+  const est = result.jlpt;
   const exam = examOf(e);
   const pct = result.percent;
   let filter = result.total - result.correct ? "wrong" : "all";
@@ -43,16 +45,29 @@ export async function render(page, { params }) {
         chip(`정답률 ${pct}%`, pct >= 80 ? "ok" : pct >= 60 ? "info" : "warn"),
         chip(`미응답 ${result.unsolved}`),
         chip(`소요 ${fmtClock(a.submittedAt - a.startedAt)}`),
+        est?.complete
+          ? chip(
+              `추정 ${est.total}/${est.max}점 · ${est.passed ? "합격권" : "불합격권"}`,
+              est.passed ? "ok" : "danger",
+            )
+          : null,
         result.pass
           ? chip(result.pass.passed ? "합격 기준 충족" : "불합격", result.pass.passed ? "ok" : "danger")
           : null,
       ),
-      result.pass
+      est
         ? h("p", {
             class: "muted",
-            text: `과목 평균 ${result.pass.average}점 (기준 ${result.pass.rule.averageMin}점)${result.pass.failed.length ? ` · 과락: ${result.pass.failed.map((p) => partLabel(e, p)).join(", ")}` : " · 과락 없음"}`,
+            text: est.complete
+              ? `${est.level} 추정 점수입니다. 공식 JLPT는 문항 난이도로 환산(등화)하므로 실제 점수와 다를 수 있습니다. 합격선 ${est.passMark}점, 영역별 기준점 미달은 불합격입니다.`
+              : `${est.level} 일부 問題만 푼 연습입니다. 영역별 추정 점수만 표시하고 합격 여부는 판정하지 않습니다.`,
           })
-        : h("p", { class: "muted", text: "원점수(정답 수) 기준입니다. 공식 환산 점수가 아닙니다." }),
+        : result.pass
+          ? h("p", {
+              class: "muted",
+              text: `과목 평균 ${result.pass.average}점 (기준 ${result.pass.rule.averageMin}점)${result.pass.failed.length ? ` · 과락: ${result.pass.failed.map((p) => partLabel(e, p)).join(", ")}` : " · 과락 없음"}`,
+            })
+          : h("p", { class: "muted", text: "원점수(정답 수) 기준입니다. 공식 환산 점수가 아닙니다." }),
       h(
         "div",
         { class: "row" },
@@ -73,8 +88,25 @@ export async function render(page, { params }) {
     h(
       "div",
       { class: "card-head" },
-      h("h2", { text: e.exam === "toeic" ? "영역 · 파트별 정답률" : "과목별 점수" }),
+      h("h2", {
+        text:
+          e.exam === "toeic" ? "영역 · 파트별 정답률" : ja ? "영역별 추정 점수 · 問題별 정답" : "과목별 점수",
+      }),
     ),
+    est
+      ? h(
+          "div",
+          { class: "section-scores" },
+          ...Object.values(est.sections).map((b) =>
+            h(
+              "div",
+              { class: ["stat", b.score !== null && b.score < b.min && "failed"] },
+              h("small", { text: `${b.label} · 기준 ${b.min}` }),
+              h("strong", {}, b.score === null ? "—" : `${b.score}`, h("span", { text: ` / ${b.max}` })),
+            ),
+          ),
+        )
+      : null,
     sections.length > 1
       ? h(
           "div",
@@ -107,7 +139,7 @@ export async function render(page, { params }) {
                 : "danger",
           ),
           h("strong", {
-            text: e.exam === "toeic" ? `${p.correct}/${p.total}` : `${Math.round(p.percent)}점`,
+            text: e.exam === "cbt" ? `${Math.round(p.percent)}점` : `${p.correct}/${p.total}`,
           }),
         ),
       ),
@@ -134,7 +166,7 @@ export async function render(page, { params }) {
           h("small", { class: "muted", text: g.id }),
         ),
       );
-      block.append(...groupMaterial(g, { open: false }));
+      block.append(...groupMaterial(g, { open: false, ja }));
       if (isAudioGroup(e, g) && g.segments.length)
         block.append(
           h(
@@ -147,7 +179,12 @@ export async function render(page, { params }) {
                 { class: "script-line" },
                 h("small", {
                   class: "muted",
-                  text: sg.speaker === "narrator" ? "내레이션" : "화자 " + sg.speaker,
+                  text:
+                    sg.speaker === "narrator"
+                      ? "내레이션"
+                      : /^[FM]2?$/.test(sg.speaker)
+                        ? (sg.speaker[0] === "F" ? "여성" : "남성") + (sg.speaker[1] ?? "")
+                        : "화자 " + sg.speaker,
                 }),
                 h("p", { text: sg.text }),
                 sg.audio ? h("audio", { controls: true, preload: "none", src: sg.audio }) : null,
@@ -160,7 +197,16 @@ export async function render(page, { params }) {
           h(
             "div",
             { class: ["review-q", r.correct ? "is-correct" : r.mark === null ? "is-blank" : "is-wrong"] },
-            h("p", { class: "q-text" }, h("span", { class: "q-num", text: r.number }), q.question),
+            h(
+              "p",
+              { class: "q-text", lang: ja ? "ja" : null },
+              h("span", {
+                class: ["q-num", ja && isAudioGroup(e, g) && "ja-num"],
+                text: ja && isAudioGroup(e, g) ? `${r.number}番` : r.number,
+              }),
+              ...richText(q.question, ja),
+            ),
+            ja ? questionFigure(e, q, { small: true }) : null,
             h(
               "ol",
               { class: "choices review" },
@@ -169,7 +215,7 @@ export async function render(page, { params }) {
                   "li",
                   { class: [i === q.answer && "answer", i === r.mark && i !== q.answer && "mine"] },
                   h("span", { class: "mark", text: choiceMark(e, i) }),
-                  h("span", { text: c }),
+                  h("span", { lang: ja ? "ja" : null }, ...richText(c, ja)),
                   i === q.answer ? chip("정답", "ok") : i === r.mark ? chip("내 답", "danger") : null,
                 ),
               ),

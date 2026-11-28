@@ -2631,3 +2631,51 @@ body.focus-mode .sidebar {
     border-color: #777;
   }
 }
+
+/* JLPT paper: Japanese typesetting, readings, underlined targets, listening items. */
+.paper [lang="ja"],
+.print-sheet [lang="ja"],
+.review-q [lang="ja"],
+.ja-passage {
+  font-family: "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", "Noto Serif JP", "MS Mincho", serif;
+  line-height: 1.9;
+}
+.ja-passage p {
+  white-space: pre-wrap;
+}
+ruby rt {
+  font-size: 0.55em;
+  letter-spacing: 0;
+}
+u.ja-target {
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 4px;
+}
+.q-num.ja-num {
+  min-width: 44px;
+}
+.ja-figure {
+  max-width: min(100%, 620px);
+  background: #fff;
+  border-radius: 10px;
+  margin: 6px 0 10px 40px;
+}
+.choices.choices-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.choices.choices-row > li {
+  flex: none;
+}
+.choice.compact {
+  width: auto;
+  min-width: 52px;
+  justify-content: center;
+}
+.omr-part {
+  margin: 8px 0 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted, #667);
+}

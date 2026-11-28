@@ -22,7 +22,7 @@ async function walk(path) {
     const name = join(path, item.name);
     if (item.isDirectory()) await walk(name);
     else {
-      const bundledPhoto = /[\\/]assets[\\/]part1-photos[\\/][0-9a-f]{16}\.jpg$/.test(name);
+      const bundledPhoto = /[\\/]assets[\\/](?:part1-photos|jlpt-images)[\\/][0-9a-f]{16}\.jpg$/.test(name);
       const bundledDirection = /[\\/]assets[\\/]directions[\\/][a-z0-9-]+\.wav$/.test(name);
       if (
         (/\.(mp3|wav|ogg|jpe?g)$/i.test(name) && !bundledPhoto && !bundledDirection) ||

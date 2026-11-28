@@ -1,5 +1,6 @@
 // Exam hall registry shared by the local server and the browser UI.
-// Raw scores only: no exam in this file claims an official scaled score.
+// Raw scores only: no exam in this file claims an official scaled score (JLPT shows a labelled estimate).
+import { jlptParts, jlptSections, jlptBlueprint, JLPT_GAPS, JLPT_LEVELS } from "./jlpt.mjs";
 
 export const LETTERS = ["A", "B", "C", "D", "E"];
 export const SCHEMA = 2;
@@ -27,6 +28,19 @@ export const EXAMS = {
       RC: { label: "Reading", fullSeconds: 4500, fullCount: 100, audio: false },
     },
     parts: toeicParts,
+  },
+  jlpt: {
+    id: "jlpt",
+    name: "JLPT",
+    hall: "JLPT관",
+    tagline: "日本語能力試験 · N1–N5",
+    description:
+      "레벨별 실제 문제 구성(問題1…)과 시간으로 언어지식·독해·청해 회차를 만듭니다. 청해는 Live 낭독, 그림 문제는 내장 일러스트를 씁니다.",
+    language: "ja",
+    levels: JLPT_LEVELS,
+    // Per level; examOf(episode) fills in the level's sections and 問題.
+    sections: jlptSections("N3"),
+    parts: null,
   },
   cbt: {
     id: "cbt",
@@ -68,9 +82,16 @@ export const CBT_PRESETS = [
 export const KTS_PASS = { subjectMin: 40, averageMin: 60 };
 const GROUP_SIZE_CBT = 5;
 
+const jlptViews = new Map();
 export function examOf(episode) {
   const exam = EXAMS[episode?.exam];
   if (!exam) throw Error("지원하지 않는 시험관입니다.");
+  if (exam.id === "jlpt") {
+    const level = JLPT_LEVELS.includes(episode.config?.level) ? episode.config.level : "N3";
+    if (!jlptViews.has(level))
+      jlptViews.set(level, { ...exam, sections: jlptSections(level), parts: jlptParts(level), level });
+    return jlptViews.get(level);
+  }
   return exam;
 }
 
@@ -88,6 +109,7 @@ export function partsOf(episode) {
 }
 export const partLabel = (episode, part) => {
   const p = partsOf(episode)[part];
+  if (episode.exam === "jlpt") return p ? `${p.label} · ${p.ko}` : `問題 ${part}`;
   return episode.exam === "toeic" ? `Part ${part} · ${p?.label ?? ""}` : (p?.label ?? `과목 ${part}`);
 };
 export const sectionOf = (episode, group) => partsOf(episode)[group.part]?.section ?? "RC";
@@ -255,6 +277,16 @@ export const TOEIC_FIRST = { 1: 1, 2: 7, 3: 32, 4: 71, 5: 101, 6: 131, 7: 147 };
 
 /** Number of the group's first question, as printed on the paper and spoken by the narrator. */
 export function firstNumberOf(e, g) {
+  if (e?.exam === "jlpt") {
+    // Paper sections number questions continuously; each listening 問題 starts again at 1 (1番, 2番 …).
+    const section = sectionOf(e, g);
+    let n = 1;
+    for (const x of e.groups ?? []) {
+      if (x.id === g.id) return n;
+      if (sectionOf(e, x) === section && (section !== "L" || x.part === g.part)) n += x.count;
+    }
+    return n;
+  }
   const toeic = (e?.exam ?? "toeic") === "toeic";
   if (!e?.groups?.some((x) => x.id === g.id)) {
     // A group parsed on its own: standard TOEIC numbering by its position in the part.
@@ -292,6 +324,7 @@ export const isFullListening = (e) => {
  * question, a short breath between conversation turns.
  */
 export function audioTimeline(e) {
+  if (e.exam === "jlpt") return jlptTimeline(e);
   const clips = e.directions?.clips ?? null;
   // Part directions play in every TOEIC listening episode; the section intro/end, number cues and page turns only
   // fit the full 100-question layout.
@@ -385,3 +418,36 @@ export function questionCounts(e) {
   for (const g of e.groups) counts[g.part] = (counts[g.part] ?? 0) + g.count;
   return counts;
 }
+
+/**
+ * JLPT listening as played: every segment carries a role. 問題 directions, then per item "N番" with the situation
+ * and question, the conversation, the question again and the answer time (ポイント理解 adds reading time after
+ * the question; 概要理解/発話表現/即時応答 read the options aloud).
+ */
+function jlptTimeline(e) {
+  const list = [];
+  let at = 0;
+  for (const g of e.groups) {
+    if (!isAudioGroup(e, g)) continue;
+    const kind = partsOf(e)[g.part]?.kind;
+    const segs = g.segments ?? [];
+    segs.forEach((s, i) => {
+      const next = segs[i + 1];
+      const nextSameItem = next && next.q === s.q;
+      let gap;
+      if (s.role === "directions") gap = JLPT_GAPS.directions;
+      else if (s.role === "prompt")
+        gap = kind === "point" && next?.role === "turn" ? JLPT_GAPS.read : JLPT_GAPS.cue;
+      else if (s.role === "line") gap = JLPT_GAPS.cue;
+      else if (s.role === "turn") gap = next?.role === "turn" ? JLPT_GAPS.turn : JLPT_GAPS.cue;
+      else if (s.role === "question")
+        gap = nextSameItem && next.role === "choices" ? JLPT_GAPS.cue : JLPT_GAPS.answer;
+      else gap = kind === "summary" ? JLPT_GAPS.answer : JLPT_GAPS.short; // choices read aloud
+      list.push({ ...s, kind: "segment", groupId: g.id, start: at, end: at + (s.duration ?? 0) });
+      at += (s.duration ?? 0) + gap;
+    });
+  }
+  return list;
+}
+
+export { jlptBlueprint };

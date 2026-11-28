@@ -1,5 +1,6 @@
 // Raw-score grading. Pass/fail is only computed for exams whose episode config carries an explicit rule.
 import { partsOf, examOf, questionsOf, questionNumbers } from "./exams.mjs";
+import { jlptEstimate } from "./jlpt.mjs";
 
 const summarize = (rows) => {
   const correct = rows.filter((r) => r.correct).length;
@@ -42,6 +43,12 @@ export function scoreAttempt(e, marks = {}) {
     };
   }
   const summary = { ...summarize(rows), bySection, byPart };
+  if (e.exam === "jlpt") {
+    const full = Object.entries(parts).every(
+      ([p, info]) => rows.filter((r) => r.part === Number(p)).length === info.count,
+    );
+    summary.jlpt = jlptEstimate(e.config?.level, rows, parts, full);
+  }
   const rule = e.config?.passRule;
   if (rule) {
     const scores = Object.values(byPart).map((p) => p.percent);

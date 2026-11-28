@@ -20,7 +20,7 @@ const NAV = [
 const ROUTES = [
   [/^home$/, home, "home"],
   [/^halls$/, halls, "halls"],
-  [/^create\/(toeic|cbt)$/, halls, "halls"],
+  [/^create\/(toeic|jlpt|cbt)$/, halls, "halls"],
   [/^library$/, library, "library"],
   [/^episode\/([\w-]+)$/, studio, "library"],
   [/^exam\/([\w-]+)\/([\w-]+)$/, exam, null],

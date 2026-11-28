@@ -1,0 +1,1406 @@
+{
+ "schema": 1,
+ "source": "Mark & Listen JLPT listening illustrations (AI-generated, owner-provided)",
+ "photos": [
+  {
+   "file": "992bcbf5672f8464.jpg",
+   "sha256": "992bcbf5672f8464b41a7a28ad590a2f6bf347f2bd8f161ac5aeee81edff4515",
+   "kind": "grid",
+   "name": "backpack and desk position",
+   "dhash": "ae337169af333333"
+  },
+  {
+   "file": "b94b591573de462f.jpg",
+   "sha256": "b94b591573de462f69db39cce200628cc8212797b8a50f656702c2c05fb5b388",
+   "kind": "grid",
+   "name": "backpack and desk position",
+   "dhash": "ab337161ab333333"
+  },
+  {
+   "file": "6250208a596ddfaa.jpg",
+   "sha256": "6250208a596ddfaadf4d83e947c7d5c4403e5f1e9e77e0ac2b5327f50686b6a9",
+   "kind": "grid",
+   "name": "bags suitcase backpack tote",
+   "dhash": "7733333333333333"
+  },
+  {
+   "file": "a42d7fc1b1f17f43.jpg",
+   "sha256": "a42d7fc1b1f17f43e86b9b72ba6590de443e2cc4a126ebcc79eb420d9f137023",
+   "kind": "grid",
+   "name": "bags suitcase backpack tote",
+   "dhash": "2333313323333333"
+  },
+  {
+   "file": "2be8972d3e67739d.jpg",
+   "sha256": "2be8972d3e67739d98b464c7035e3bf35b73a65b83a44ce7b487ee8cc61fee50",
+   "kind": "grid",
+   "name": "ball and box position",
+   "dhash": "ab3331292b33332b"
+  },
+  {
+   "file": "a6136fcee879f5e3.jpg",
+   "sha256": "a6136fcee879f5e3ca27250a3031998d79f954c137cbdcddd0d214722f33d637",
+   "kind": "grid",
+   "name": "ball and box position",
+   "dhash": "ab3371e8ab332b2b"
+  },
+  {
+   "file": "8a2dc3eccd1cc712.jpg",
+   "sha256": "8a2dc3eccd1cc712f55fe7db328c572722efb721308048866ff46ca8b4447b20",
+   "kind": "grid",
+   "name": "bench and suitcase position",
+   "dhash": "8c337165ab333326"
+  },
+  {
+   "file": "f6d099c5c270d27c.jpg",
+   "sha256": "f6d099c5c270d27c5fc6aec733db10e5bd6739ff59fca70ccb7ecac7b97d2140",
+   "kind": "grid",
+   "name": "bench and suitcase position",
+   "dhash": "aa33714cab3331ac"
+  },
+  {
+   "file": "4913585ddb0d46ba.jpg",
+   "sha256": "4913585ddb0d46ba005ce79735aef83f76939efa84081679844d2f9db756311e",
+   "kind": "grid",
+   "name": "bench and umbrella position",
+   "dhash": "aa337344ab337366"
+  },
+  {
+   "file": "ba4f5fce7f7533d7.jpg",
+   "sha256": "ba4f5fce7f7533d776c1f866df47dc4b56bead8b1ecf94720b469c0fcc92eb48",
+   "kind": "grid",
+   "name": "bench and umbrella position",
+   "dhash": "ab33319dab33311d"
+  },
+  {
+   "file": "3fbc1e0e2dd24e9e.jpg",
+   "sha256": "3fbc1e0e2dd24e9eb76d225659a405856fdfed089c34aaad56d7356507044191",
+   "kind": "grid",
+   "name": "bicycle and fence position",
+   "dhash": "8e697117ae333171"
+  },
+  {
+   "file": "dd058e1eabe4cabd.jpg",
+   "sha256": "dd058e1eabe4cabda0933af532dfcb21602d321ed055297343dd01dc4fde953c",
+   "kind": "grid",
+   "name": "bicycle and fence position",
+   "dhash": "cd2b335586333355"
+  },
+  {
+   "file": "af55eb5833063936.jpg",
+   "sha256": "af55eb5833063936798780f73a1405a72fca4a83708944efa280bf6b2496c0a1",
+   "kind": "grid",
+   "name": "bookshelf book position",
+   "dhash": "3333333333333333"
+  },
+  {
+   "file": "d4ef956ee85f0fc5.jpg",
+   "sha256": "d4ef956ee85f0fc586425e56afa285020f77050efb7da9deceb50f7f085b57bc",
+   "kind": "grid",
+   "name": "bookshelf book position",
+   "dhash": "7333333373333333"
+  },
+  {
+   "file": "18da03694f1e9e9c.jpg",
+   "sha256": "18da03694f1e9e9ccd52e68e38ac100d6961c3b3cf12ac4779a11cb1366e41bf",
+   "kind": "grid",
+   "name": "boots and mat position",
+   "dhash": "8e3333972b333323"
+  },
+  {
+   "file": "3e1966c1ac0604e4.jpg",
+   "sha256": "3e1966c1ac0604e42595eee9f24045b9db4e00ee1a957ffdbe19e8a60bfd653e",
+   "kind": "grid",
+   "name": "boots and mat position",
+   "dhash": "cc5471a8ab333323"
+  },
+  {
+   "file": "8f0abb65e1d0b6b6.jpg",
+   "sha256": "8f0abb65e1d0b6b608669a03f8a3a206aab0a3d3c767e9b120a43f3256a8b3f1",
+   "kind": "grid",
+   "name": "bowl plate spoon chopsticks",
+   "dhash": "6754312b63953121"
+  },
+  {
+   "file": "ff8fb3827786bf1c.jpg",
+   "sha256": "ff8fb3827786bf1c6bc703e092d0afc2ac9203a35ae7c5d2bf626e78f5704726",
+   "kind": "grid",
+   "name": "bowl plate spoon chopsticks",
+   "dhash": "c6467773ccdc3146"
+  },
+  {
+   "file": "7ff084bade6cd776.jpg",
+   "sha256": "7ff084bade6cd776cad34aa14519ba15c2941743af941d7d5ac94efd85388aaa",
+   "kind": "grid",
+   "name": "cardboard box contents",
+   "dhash": "3333332233333322"
+  },
+  {
+   "file": "c8f66468900b09f1.jpg",
+   "sha256": "c8f66468900b09f188d82c733edb9ef58ff0effb129b0edb0cc10eb9ea1df721",
+   "kind": "grid",
+   "name": "cardboard box contents",
+   "dhash": "3733333373333333"
+  },
+  {
+   "file": "333a6aa084286665.jpg",
+   "sha256": "333a6aa0842866658085b15107fb1f29a52133bc7b40f2bebebd53cc0cb8c384",
+   "kind": "grid",
+   "name": "cat chair table position",
+   "dhash": "3333332375333131"
+  },
+  {
+   "file": "a5f1c948661a15b4.jpg",
+   "sha256": "a5f1c948661a15b46a00ee5b0509a93eaf49d124eaf82ea5ca9643896e89d5dc",
+   "kind": "grid",
+   "name": "cat chair table position",
+   "dhash": "c4555556c5555555"
+  },
+  {
+   "file": "62fe0bf3a91bd45a.jpg",
+   "sha256": "62fe0bf3a91bd45a9529bd499f4ace588dbf2f2457dc21d74af633fa74d58ca5",
+   "kind": "grid",
+   "name": "chair and tote bag position",
+   "dhash": "3333332333312363"
+  },
+  {
+   "file": "a0df6c42df18ee0d.jpg",
+   "sha256": "a0df6c42df18ee0d893447df040b96775bdc19f3c9a0b37d5e54d563c9f7e6c7",
+   "kind": "grid",
+   "name": "chair and tote bag position",
+   "dhash": "3333336333313333"
+  },
+  {
+   "file": "40ac2beeeed55b38.jpg",
+   "sha256": "40ac2beeeed55b38ed2f973312c3dda5388f82fac20952c4e7ecd7f10f255900",
+   "kind": "grid",
+   "name": "classroom seat position",
+   "dhash": "3371715533317155"
+  },
+  {
+   "file": "58258413f9db58eb.jpg",
+   "sha256": "58258413f9db58eb4ab389f6ad98d63d16e0106bf3eed9e28169fe0d044e0290",
+   "kind": "grid",
+   "name": "classroom seat position",
+   "dhash": "33315555333355d4"
+  },
+  {
+   "file": "58e05dcae114f44d.jpg",
+   "sha256": "58e05dcae114f44d6ad21497e22d54dbc4ef6080e217046054cf1289eae50dca",
+   "kind": "grid",
+   "name": "clock showing time",
+   "dhash": "3375513333557333"
+  },
+  {
+   "file": "6e6c4260ce3d1997.jpg",
+   "sha256": "6e6c4260ce3d199778a29a3be45cb5b0b65b40592709ed36bc9eae11e2f8f91d",
+   "kind": "grid",
+   "name": "clock showing time",
+   "dhash": "3331733333537333"
+  },
+  {
+   "file": "c85fc1788e7f9521.jpg",
+   "sha256": "c85fc1788e7f95213ff658a1e7b9ca2b5fcf6a43fdaf625a4796653115ea27c9",
+   "kind": "grid",
+   "name": "clock showing time",
+   "dhash": "160b2b16162f2b96"
+  },
+  {
+   "file": "e3a247e599e06927.jpg",
+   "sha256": "e3a247e599e069272e357c595118e4453a0a4f8ab688b7661612007cb3cc7728",
+   "kind": "grid",
+   "name": "clock showing time",
+   "dhash": "3335513333553333"
+  },
+  {
+   "file": "0c257c32b1b291eb.jpg",
+   "sha256": "0c257c32b1b291eb8e83efc88890d969ebe8bd9dc21097a049a38c18e0e9046a",
+   "kind": "grid",
+   "name": "cup and plate position",
+   "dhash": "2f23160f2f16172b"
+  },
+  {
+   "file": "da6e1dcc6eb96edb.jpg",
+   "sha256": "da6e1dcc6eb96edbe83ec746beb25156a5d7626da036cd2faa727155ca0ce648",
+   "kind": "grid",
+   "name": "cup and plate position",
+   "dhash": "8c6d3332cb332323"
+  },
+  {
+   "file": "c97b4bef579ec45c.jpg",
+   "sha256": "c97b4bef579ec45c880e338c354f17aeb1804472b178d7d470b5db3dcddf8990",
+   "kind": "grid",
+   "name": "electric fan direction",
+   "dhash": "332b3333332b3333"
+  },
+  {
+   "file": "d36976cffe42c9cd.jpg",
+   "sha256": "d36976cffe42c9cdb7e6c06363cf0fab041383cf875dcb82ee4d8114012550ff",
+   "kind": "grid",
+   "name": "electric fan direction",
+   "dhash": "632b2b23232b2b2b"
+  },
+  {
+   "file": "49e785ea590ab75e.jpg",
+   "sha256": "49e785ea590ab75e7cddd16f5209444d25ae84f864a28366741db2732f7daa66",
+   "kind": "grid",
+   "name": "entrance shoes position",
+   "dhash": "2b2b3331ab2b7155"
+  },
+  {
+   "file": "5d5f4bca9aff1de9.jpg",
+   "sha256": "5d5f4bca9aff1de98b8596ea9836f935ca7e0cd4fb0e5111ff3a66d1b51829d0",
+   "kind": "grid",
+   "name": "entrance shoes position",
+   "dhash": "4673332346737363"
+  },
+  {
+   "file": "34a4ff04a98799a5.jpg",
+   "sha256": "34a4ff04a98799a5b87ac9eb9ebf65b5966eed7022d83309570ee0b3b00ea9fa",
+   "kind": "grid",
+   "name": "food bread rice ball sandwich noodles",
+   "dhash": "6633333363333323"
+  },
+  {
+   "file": "e08f741cf1f836d2.jpg",
+   "sha256": "e08f741cf1f836d2a5fbba7752330c3b59ad78c102fbc2ce4e39a06dcd8d45e5",
+   "kind": "grid",
+   "name": "food bread rice ball sandwich noodles",
+   "dhash": "27133333b3337333"
+  },
+  {
+   "file": "9b4dcdb6fa765829.jpg",
+   "sha256": "9b4dcdb6fa7658296c872512bc60581760820ff5720e5d3e2101b720564161bf",
+   "kind": "grid",
+   "name": "headphones and laptop case",
+   "dhash": "d517337523333323"
+  },
+  {
+   "file": "d633fd0ffa6c88d9.jpg",
+   "sha256": "d633fd0ffa6c88d91a237e9c3781875f616070cd4d791e2db91cdda5f1737a56",
+   "kind": "grid",
+   "name": "headphones and laptop case",
+   "dhash": "8e1533c4ab2b2323"
+  },
+  {
+   "file": "198ad3d68c5d164b.jpg",
+   "sha256": "198ad3d68c5d164b92f7fc36e189d52b72d02f3e00ba2c037f95c2411f151d73",
+   "kind": "grid",
+   "name": "keychain shapes",
+   "dhash": "333b2323313b2323"
+  },
+  {
+   "file": "95c3a106cf05b16f.jpg",
+   "sha256": "95c3a106cf05b16ff85904242a8043f5a712018343c8ab307f78fc96b0bbeeff",
+   "kind": "grid",
+   "name": "keychain shapes",
+   "dhash": "232b2b23232b2b2b"
+  },
+  {
+   "file": "1b58962f608040ab.jpg",
+   "sha256": "1b58962f608040ab10e178fc6b649440d693af31d5a27107108c4f2d9243b053",
+   "kind": "grid",
+   "name": "kitchen tools pan pot kettle",
+   "dhash": "9333616335315333"
+  },
+  {
+   "file": "ad048a2cc1b864ca.jpg",
+   "sha256": "ad048a2cc1b864ca8f373ef4ae4ff40960ff201966c8aac0c620970c1906f1f2",
+   "kind": "grid",
+   "name": "kitchen tools pan pot kettle",
+   "dhash": "5633316235317333"
+  },
+  {
+   "file": "04bac38cbc04020b.jpg",
+   "sha256": "04bac38cbc04020b2db71995c8658a39a8e82d1d5a343c86a0c30888d6520e09",
+   "kind": "grid",
+   "name": "oranges on tray count",
+   "dhash": "a5317322e7737331"
+  },
+  {
+   "file": "4bc0db90c5939972.jpg",
+   "sha256": "4bc0db90c59399726a9cd3bfbf99bdbf5aea8fc01ac469e1441f42eda9e7354c",
+   "kind": "grid",
+   "name": "oranges on tray count",
+   "dhash": "63337331a3333331"
+  },
+  {
+   "file": "9d0447da03781076.jpg",
+   "sha256": "9d0447da03781076592bfcda68fd10b171e04d2921688119412146ee0a5a6240",
+   "kind": "grid",
+   "name": "parcel shapes tube envelope box",
+   "dhash": "23232322b1333323"
+  },
+  {
+   "file": "b4b5b340586c05cc.jpg",
+   "sha256": "b4b5b340586c05ccb6c9301d4359660d80c8eba8ddd33dd13890e605aa781426",
+   "kind": "grid",
+   "name": "parcel shapes tube envelope box",
+   "dhash": "93336342a1133723"
+  },
+  {
+   "file": "ba74954851e9617e.jpg",
+   "sha256": "ba74954851e9617ea5f6dcec696dfb15c6c9eff3fafa54d1de572abf721d0329",
+   "kind": "grid",
+   "name": "park fence path",
+   "dhash": "3ae5cecc24e598cc"
+  },
+  {
+   "file": "cc8c431b9ddd5d39.jpg",
+   "sha256": "cc8c431b9ddd5d39daf7bd7f0bf27e4960822cc8ea187aeb574f1da70fe1bd53",
+   "kind": "grid",
+   "name": "park path bench pond",
+   "dhash": "5456ddd8d1535c99"
+  },
+  {
+   "file": "1d411e3796145464.jpg",
+   "sha256": "1d411e3796145464220b08af2dc6f3ad4262f314bb30a4b0ae3103ef3a21ec7b",
+   "kind": "grid",
+   "name": "pencil case ruler eraser",
+   "dhash": "2433317572333122"
+  },
+  {
+   "file": "9d47b636c46638d8.jpg",
+   "sha256": "9d47b636c46638d8e240715cdac76039421e43083550819ef0b0af0c205247e0",
+   "kind": "grid",
+   "name": "pencil case ruler eraser",
+   "dhash": "a1735736a5735737"
+  },
+  {
+   "file": "68a7382839357b79.jpg",
+   "sha256": "68a7382839357b793d9e51764b63ef4eeed3a81195989313701c5f2571b2c619",
+   "kind": "grid",
+   "name": "room desk window layout",
+   "dhash": "6655159566551133"
+  },
+  {
+   "file": "d117e0550237157e.jpg",
+   "sha256": "d117e0550237157e5c269ae59719eaa608605bd8ad05bf7d59016b0298a3757d",
+   "kind": "grid",
+   "name": "room desk window layout",
+   "dhash": "737371d573777555"
+  },
+  {
+   "file": "25562c649651d2a0.jpg",
+   "sha256": "25562c649651d2a0740dada41059e02bf07397b0674b993e9a736f695411f9db",
+   "kind": "grid",
+   "name": "route on street map",
+   "dhash": "955573a395357357"
+  },
+  {
+   "file": "a95d51dd9dbd8db4.jpg",
+   "sha256": "a95d51dd9dbd8db4bf547cfa0fa548b3fb44db93ec802554e35a2dd4363c5854",
+   "kind": "grid",
+   "name": "route on street map",
+   "dhash": "4555113355517317"
+  },
+  {
+   "file": "c042bdae49185b9f.jpg",
+   "sha256": "c042bdae49185b9f6a8fe4d9abe3ce105f94fac1861930b7bc6d9048a0a09485",
+   "kind": "grid",
+   "name": "shelf and plant position",
+   "dhash": "cd377111eb333329"
+  },
+  {
+   "file": "ebda40ad532fdaea.jpg",
+   "sha256": "ebda40ad532fdaea7474e7afb3c1cf75885576be5f20589ea7be13d9ae7504eb",
+   "kind": "grid",
+   "name": "shelf and plant position",
+   "dhash": "8c733131cb333331"
+  },
+  {
+   "file": "ad5dfe880d2c4365.jpg",
+   "sha256": "ad5dfe880d2c436585e028c1e7e305f71876a64b5596c2e1d9730159b74c5f15",
+   "kind": "grid",
+   "name": "shirts and clothes",
+   "dhash": "263626a64666e666"
+  },
+  {
+   "file": "b8670b287322cc1e.jpg",
+   "sha256": "b8670b287322cc1eb1f27593c5183fc745be195c9e42128003360eaa198a051d",
+   "kind": "grid",
+   "name": "shirts and clothes",
+   "dhash": "2333333333333333"
+  },
+  {
+   "file": "8c6be32670a9ed49.jpg",
+   "sha256": "8c6be32670a9ed4905d96e04fa817e6b52c4ac9d0cf78d5eb2e337408fd46aad",
+   "kind": "grid",
+   "name": "station escalator exit",
+   "dhash": "33b9547233985653"
+  },
+  {
+   "file": "d413af203c979a2f.jpg",
+   "sha256": "d413af203c979a2f90383eef1b5b29162181efd791df742df676b5839ccc8787",
+   "kind": "grid",
+   "name": "station platform stairs",
+   "dhash": "3399b973339cb933"
+  },
+  {
+   "file": "6764e18a44bfdf9b.jpg",
+   "sha256": "6764e18a44bfdf9bbe8a41474601802cda3ff9f3168934c6c09678a532d2ac80",
+   "kind": "grid",
+   "name": "table and cup position",
+   "dhash": "a5517342a5717362"
+  },
+  {
+   "file": "f88819a5ee4445f4.jpg",
+   "sha256": "f88819a5ee4445f4c9f78106356d30abc6597de70b4a65a4bf540d21a598fd31",
+   "kind": "grid",
+   "name": "table and cup position",
+   "dhash": "ab3331a9233331a9"
+  },
+  {
+   "file": "8d817b559227adbf.jpg",
+   "sha256": "8d817b559227adbfd758b135adc1573dd123fe832ddefc6faae3e7bac708b945",
+   "kind": "grid",
+   "name": "towel and basket position",
+   "dhash": "92b233532b33332b"
+  },
+  {
+   "file": "c24b040fc5083163.jpg",
+   "sha256": "c24b040fc50831638421e8ed73e027a35899de4001305d821ec4de94beae9462",
+   "kind": "grid",
+   "name": "towel and basket position",
+   "dhash": "ae3333c339333323"
+  },
+  {
+   "file": "695b8f78561712f7.jpg",
+   "sha256": "695b8f78561712f7a9a11523f4c52fa83d39db5161238d2279e0e1723ba211bd",
+   "kind": "grid",
+   "name": "transport bus bicycle train taxi",
+   "dhash": "7233333369517763"
+  },
+  {
+   "file": "6fd4eea5f8531112.jpg",
+   "sha256": "6fd4eea5f8531112e0d6cab001ca8706e0f587aee63c625d6d9f6a7c15b2ac1a",
+   "kind": "grid",
+   "name": "transport bus bicycle train taxi",
+   "dhash": "6a3333333b313773"
+  },
+  {
+   "file": "0bedcf0d8f67d44f.jpg",
+   "sha256": "0bedcf0d8f67d44f92c591a58b9ec5958796be0240272a2df54f2182dd4ff736",
+   "kind": "grid",
+   "name": "tray and lunch box position",
+   "dhash": "ae715596ab333123"
+  },
+  {
+   "file": "aa6caab05b994770.jpg",
+   "sha256": "aa6caab05b9947703d90121adbc036b8c1c9c6fdc6a965b442f21a832dd1ea51",
+   "kind": "grid",
+   "name": "tray and lunch box position",
+   "dhash": "a35555e82b533521"
+  },
+  {
+   "file": "362a93643e0527b2.jpg",
+   "sha256": "362a93643e0527b23c15fcc6614f00a17ae63ebb78f98e796d0b93a114f24a2d",
+   "kind": "grid",
+   "name": "tree and bird position",
+   "dhash": "ab3b2babab332b2b"
+  },
+  {
+   "file": "ae95b7d94871e5f4.jpg",
+   "sha256": "ae95b7d94871e5f47cc9b8a9f746f8bb2cee82f6fe0dda22a2f817cfa3049808",
+   "kind": "grid",
+   "name": "tree and bird position",
+   "dhash": "ab33332bab33232b"
+  },
+  {
+   "file": "83011f01748dbbda.jpg",
+   "sha256": "83011f01748dbbda43d0dde0d086c228407481e582ef019f55979ea172b12093",
+   "kind": "grid",
+   "name": "umbrella patterns",
+   "dhash": "3331332b3333332b"
+  },
+  {
+   "file": "ce3826feb38a2277.jpg",
+   "sha256": "ce3826feb38a227745579b404b60ce39c622341b242a1dc1b2a54457c6327c76",
+   "kind": "grid",
+   "name": "umbrella patterns",
+   "dhash": "333373b1333333b1"
+  },
+  {
+   "file": "5ae92c42989145af.jpg",
+   "sha256": "5ae92c42989145afbf452c8932275baf70d982c7bba95fb009cb79f63b6b4635",
+   "kind": "grid",
+   "name": "watering can and stool position",
+   "dhash": "cc3371558b232b23"
+  },
+  {
+   "file": "9ac9d265b611081d.jpg",
+   "sha256": "9ac9d265b611081dac4aecd18d15da40a0d4316d861abcfdf6f72fa0cdf009b9",
+   "kind": "grid",
+   "name": "watering can and stool position",
+   "dhash": "8e13714dab2b2b2b"
+  },
+  {
+   "file": "4c26022e9096ca53.jpg",
+   "sha256": "4c26022e9096ca530fa0c5fcd2dde5ff4933998defbb932809322d963378cb22",
+   "kind": "grid",
+   "name": "weather icons",
+   "dhash": "ad232323a9332b31"
+  },
+  {
+   "file": "904b9eb6ccea1b94.jpg",
+   "sha256": "904b9eb6ccea1b941fc3de1a2aade61b2406eeb14fb348aae315af27882a6b29",
+   "kind": "grid",
+   "name": "weather icons",
+   "dhash": "7533333777333333"
+  },
+  {
+   "file": "19d0233068ca07d2.jpg",
+   "sha256": "19d0233068ca07d23913fba2c2cefcd23f903b3e00d80969df8ae6d41cfe2ad5",
+   "kind": "scene",
+   "name": "Barista handing cup to customer",
+   "dhash": "101412330b233b2b"
+  },
+  {
+   "file": "8441d81b5c1a8e66.jpg",
+   "sha256": "8441d81b5c1a8e66630896ac48963cb361f0e28b09678a361973bb7f641d30b9",
+   "kind": "scene",
+   "name": "Barista handing cup to customer",
+   "dhash": "1616121a0b272b1b"
+  },
+  {
+   "file": "6123a1ed0efc6943.jpg",
+   "sha256": "6123a1ed0efc694318ff3b9e87d2ce189af99f3ea639687f8fe957a168735178",
+   "kind": "scene",
+   "name": "Cashier showing bag to shopper",
+   "dhash": "b0b23323371b0b43"
+  },
+  {
+   "file": "b52955112af30c51.jpg",
+   "sha256": "b52955112af30c5133c6979d1fb7c3ee4a3946f414fc388e60fcea396bdcf0b9",
+   "kind": "scene",
+   "name": "Cashier showing bag to shopper",
+   "dhash": "b4b2332b1b17331b"
+  },
+  {
+   "file": "1c49933290457ab3.jpg",
+   "sha256": "1c49933290457ab3a3da8bd94bd416cdee6f535573519c588b26de53280431b8",
+   "kind": "scene",
+   "name": "Clerk helping customer in store",
+   "dhash": "32b3b39393b3b336"
+  },
+  {
+   "file": "8ea106d754c4b6ef.jpg",
+   "sha256": "8ea106d754c4b6efeb86ba83f4835002516409b1faa621049cc79154b49302c6",
+   "kind": "scene",
+   "name": "Clerk helping customer in store",
+   "dhash": "1113979797933316"
+  },
+  {
+   "file": "386ad2886c2d296a.jpg",
+   "sha256": "386ad2886c2d296a78b23bd4bad17e24cf5d685a1d126bf877ab24e005a44ae7",
+   "kind": "scene",
+   "name": "Clerk returning item in postoffice",
+   "dhash": "94143232322b0b0f"
+  },
+  {
+   "file": "6a09049c38d0a00f.jpg",
+   "sha256": "6a09049c38d0a00fefc3c98e5ef4943b095df8ffa801aae6fc9dfd7932f457d6",
+   "kind": "scene",
+   "name": "Clerk returning item to customer",
+   "dhash": "1c1e161e0e323212"
+  },
+  {
+   "file": "d22d6f0d023acb4a.jpg",
+   "sha256": "d22d6f0d023acb4af63aa9476f8b958a3dec0cb173c156daf718403790c771c8",
+   "kind": "scene",
+   "name": "Clerk showing boxes to customer",
+   "dhash": "101692929b923212"
+  },
+  {
+   "file": "9e9ccacbf50b190e.jpg",
+   "sha256": "9e9ccacbf50b190ea7b0c8e0e50345a51264892bed25845fa2c0c430e471e911",
+   "kind": "scene",
+   "name": "Clerk shows customer shipping boxes",
+   "dhash": "109393931b1b3b33"
+  },
+  {
+   "file": "046c943ecc7f979e.jpg",
+   "sha256": "046c943ecc7f979ede858173c6f34e45af958e4e9de22a9d5acb10a48a4406ae",
+   "kind": "scene",
+   "name": "Coworker asking about papers",
+   "dhash": "1014131b17131313"
+  },
+  {
+   "file": "2ac7426e3673b285.jpg",
+   "sha256": "2ac7426e3673b2852ef37e95622728f5f6ec51b7e22ee3a86bca138363c2f6b6",
+   "kind": "scene",
+   "name": "Coworker asking about papers",
+   "dhash": "b0333b3b33272333"
+  },
+  {
+   "file": "00a180f1d7359b87.jpg",
+   "sha256": "00a180f1d7359b87de7f0b5932703d8fce6973036360095761ba507ee9ca5f21",
+   "kind": "scene",
+   "name": "Coworker pointing at printer",
+   "dhash": "28b32b2f0b2b2b2b"
+  },
+  {
+   "file": "3a264197d5f14f98.jpg",
+   "sha256": "3a264197d5f14f98e81bb1a50117f87940c5d11d6914488a39ac32318b35f115",
+   "kind": "scene",
+   "name": "Coworker pointing at printer",
+   "dhash": "30b4321a1a123a3a"
+  },
+  {
+   "file": "be16beb0e36e7ded.jpg",
+   "sha256": "be16beb0e36e7dedc2891538175f00321a3a8be281771dae27c84baa19b1b104",
+   "kind": "scene",
+   "name": "Customer and clerk in post",
+   "dhash": "0014969606969610"
+  },
+  {
+   "file": "513e62793bef470c.jpg",
+   "sha256": "513e62793bef470ce917831b86865e8a58b9b23c0394bea60d723cdd672ed967",
+   "kind": "scene",
+   "name": "Customer asking barista about",
+   "dhash": "21333323272b2334"
+  },
+  {
+   "file": "c5dac1320e12f9fa.jpg",
+   "sha256": "c5dac1320e12f9fa173888e4995263ab6ba2270c3d58622768dcfaa1cea7e9b0",
+   "kind": "scene",
+   "name": "Customer asking barista about",
+   "dhash": "30b23323232b2b33"
+  },
+  {
+   "file": "721bf3c11c5c7734.jpg",
+   "sha256": "721bf3c11c5c773417f4cb1a2562597aa9207c8149762686e99f55fe2cd03f7c",
+   "kind": "scene",
+   "name": "Customer asking clerk about parcel",
+   "dhash": "25a3333b3b2b2b37"
+  },
+  {
+   "file": "2b2db33cf353d781.jpg",
+   "sha256": "2b2db33cf353d7819552af2d58cb31e2ea9e6847ae0d07ef74ff23b0f9365ae6",
+   "kind": "scene",
+   "name": "Customer asking to move coat",
+   "dhash": "04b4b23307271716"
+  },
+  {
+   "file": "864daffc1354d8ae.jpg",
+   "sha256": "864daffc1354d8aebd826cd9bc52784f0c9f1359aeefad8c6238e5a9e41a21ab",
+   "kind": "scene",
+   "name": "Customer asking to move coat",
+   "dhash": "1014160f0716160c"
+  },
+  {
+   "file": "7a3b5597b930e518.jpg",
+   "sha256": "7a3b5597b930e518a627814fe25ad0d30024cf6af7e24083c0c44c8f0417568e",
+   "kind": "scene",
+   "name": "Customer handing coat to cashier",
+   "dhash": "1096120f0f2bbb33"
+  },
+  {
+   "file": "d3d760b1aa45efa6.jpg",
+   "sha256": "d3d760b1aa45efa664a72f8933f11c42c5a80761554b48bec90515f773bcc8fe",
+   "kind": "scene",
+   "name": "Customer handing coat to cashier",
+   "dhash": "9016321e0b1bbb35"
+  },
+  {
+   "file": "0c9f9a35e976ab33.jpg",
+   "sha256": "0c9f9a35e976ab336a0c8f3c3be00f278b6cf18fa93721682d4e5d372a0f2127",
+   "kind": "scene",
+   "name": "Customer pointing at bakery loaf",
+   "dhash": "001816969e8e9604"
+  },
+  {
+   "file": "b8beb2a9ede86046.jpg",
+   "sha256": "b8beb2a9ede86046fcc4f4c91f37b8b05fea4952d2c72b7d1286e896e8ca1e16",
+   "kind": "scene",
+   "name": "Customer pointing at bakery loaf",
+   "dhash": "b0b3b3232b2b2b33"
+  },
+  {
+   "file": "2c07c97ab07a28e0.jpg",
+   "sha256": "2c07c97ab07a28e0968d6f9a63a6ac7fbad0999f005e834062ef948633c7627c",
+   "kind": "scene",
+   "name": "Customer pointing at post office",
+   "dhash": "119392b223232733"
+  },
+  {
+   "file": "5aca1bcdcf072461.jpg",
+   "sha256": "5aca1bcdcf0724613b37fb726c884014fe8b2f8b47789da1a1866861ddf23a9d",
+   "kind": "scene",
+   "name": "Customer pointing at post office",
+   "dhash": "b4b3b33333432337"
+  },
+  {
+   "file": "634693831067ab5f.jpg",
+   "sha256": "634693831067ab5f749dc667c9165ec5775eb0258295dd08222e412a0cc0073a",
+   "kind": "scene",
+   "name": "Customer showing server extra plate",
+   "dhash": "189696130b979212"
+  },
+  {
+   "file": "9f017bd502fc3fe0.jpg",
+   "sha256": "9f017bd502fc3fe032f143aeae3ddac8072146d0cb6620a5d1cfa2f08e1bc712",
+   "kind": "scene",
+   "name": "Customer showing server extra plate",
+   "dhash": "30373333131b3b3b"
+  },
+  {
+   "file": "55815e09e273ea92.jpg",
+   "sha256": "55815e09e273ea920b48db992b44ff2d812a6aaf1b3b4d35a34df6e2677311ef",
+   "kind": "scene",
+   "name": "Cyclist asking walker to move",
+   "dhash": "06949313133b3941"
+  },
+  {
+   "file": "eb218842dc94e09d.jpg",
+   "sha256": "eb218842dc94e09d57682b2a617c63cec310b3836e232d38e23b6c888eb734f7",
+   "kind": "scene",
+   "name": "Cyclist asking walker to move",
+   "dhash": "02b032323331334e"
+  },
+  {
+   "file": "2d7d1b47eb189db2.jpg",
+   "sha256": "2d7d1b47eb189db23f6451ff4ca9278cb20a44a9ea1ed4514e228426e0124294",
+   "kind": "scene",
+   "name": "Diner asking for chopsticks illu",
+   "dhash": "b6b6b3b316163316"
+  },
+  {
+   "file": "ceed00ff6616936a.jpg",
+   "sha256": "ceed00ff6616936ae544afa6fe2864e898198c3a814f03824608ecd17645cd64",
+   "kind": "scene",
+   "name": "Diner asking for chopsticks illu",
+   "dhash": "9496333b3b571313"
+  },
+  {
+   "file": "0bac321b9cc04b02.jpg",
+   "sha256": "0bac321b9cc04b02eaa466a25162ec80886d70ec619ecd52cbb03c25c778c4ae",
+   "kind": "scene",
+   "name": "Diner asking server for spoon",
+   "dhash": "30b6363212161212"
+  },
+  {
+   "file": "2a5de99c516057e4.jpg",
+   "sha256": "2a5de99c516057e444ed4561266a1adc3787585ea4ca5ac48173d79e00272036",
+   "kind": "scene",
+   "name": "Diner asking server for spoon",
+   "dhash": "009692921b93121a"
+  },
+  {
+   "file": "b1cde038c018bdc0.jpg",
+   "sha256": "b1cde038c018bdc07e986985d5df31361259ea8e827a7bbf10e0a287fa619641",
+   "kind": "scene",
+   "name": "Diner calling server in restaurant",
+   "dhash": "30b2b2961a12131b"
+  },
+  {
+   "file": "b474afef3e3ce82a.jpg",
+   "sha256": "b474afef3e3ce82abeca27bb05e966612789046d719dbf266920cd542def95bb",
+   "kind": "scene",
+   "name": "Diner calling server in restaurant",
+   "dhash": "20b23b33333b0f1b"
+  },
+  {
+   "file": "6d1c02968cb42507.jpg",
+   "sha256": "6d1c02968cb42507d3c3cf34ab0789e6d5f9bb7a31aa2a339f8fb348a634b5ef",
+   "kind": "scene",
+   "name": "Diner showing reservation card",
+   "dhash": "1014169697971714"
+  },
+  {
+   "file": "a1fc24c3165d9000.jpg",
+   "sha256": "a1fc24c3165d9000195f03a011089492298598e45fa3b7d892010364b5f23002",
+   "kind": "scene",
+   "name": "Diner showing reservation card",
+   "dhash": "1816169696961212"
+  },
+  {
+   "file": "382c88c73e14f767.jpg",
+   "sha256": "382c88c73e14f76731e1d67592cd09096c5b3b6ab024c688ef4c66ac0784d57c",
+   "kind": "scene",
+   "name": "Driver pointing at folded stroller",
+   "dhash": "304f555b5337272e"
+  },
+  {
+   "file": "86084e1e3c026a93.jpg",
+   "sha256": "86084e1e3c026a9328deb1b4ad950f2fe267ba7ebbe9631d79a5bd21ef5f9ea1",
+   "kind": "scene",
+   "name": "Driver pointing at stroller",
+   "dhash": "6f2f2f2b0b1b5b5a"
+  },
+  {
+   "file": "a0c778207014447f.jpg",
+   "sha256": "a0c778207014447f8556332f6e747f5302581c112435d6b173aea5449e7c7338",
+   "kind": "scene",
+   "name": "Family member setting bowl table",
+   "dhash": "581a181e33111115"
+  },
+  {
+   "file": "bf284083b23ebdf1.jpg",
+   "sha256": "bf284083b23ebdf1252844779f9e66780ae37e215fad2f8b4500c683083804ff",
+   "kind": "scene",
+   "name": "Family member setting bowl table",
+   "dhash": "14149696133d1713"
+  },
+  {
+   "file": "1c03d03755cb4514.jpg",
+   "sha256": "1c03d03755cb4514bef6f1b5fcd53ee2d81a77ec40c1c37e7c223f01363031e6",
+   "kind": "scene",
+   "name": "Guest offering gift to host",
+   "dhash": "1256169e96160706"
+  },
+  {
+   "file": "82dcfd9f82a0b6d9.jpg",
+   "sha256": "82dcfd9f82a0b6d9c58542d87853178ed35c4073ea4fb5048e8a4097133d0290",
+   "kind": "scene",
+   "name": "Guest offering gift to host",
+   "dhash": "5056161a32332a8e"
+  },
+  {
+   "file": "7be44f3f89d1193e.jpg",
+   "sha256": "7be44f3f89d1193ed089417dacebfdcb35ecfefbb2393ea8c229f12a7b377afb",
+   "kind": "scene",
+   "name": "Guide and visitor in museum",
+   "dhash": "1054531b1b111313"
+  },
+  {
+   "file": "4fd791cb9c706b0e.jpg",
+   "sha256": "4fd791cb9c706b0e373a3b4bcafcbf41a5bd54f7b4e4a5843d43325ad2c9bc4f",
+   "kind": "scene",
+   "name": "Guide gesturing in museum",
+   "dhash": "0b0b1b1b1b0b0b1b"
+  },
+  {
+   "file": "cc4030b561dce35a.jpg",
+   "sha256": "cc4030b561dce35ab0f80ec2bfbb86b1cd2f11885161a9bc0caad95062020b77",
+   "kind": "scene",
+   "name": "Nurse directing patient to chair",
+   "dhash": "1053173635111195"
+  },
+  {
+   "file": "b64ef0d11fdbe6ae.jpg",
+   "sha256": "b64ef0d11fdbe6ae4172468609a4dae07030577be158f75142a6e956c28859aa",
+   "kind": "scene",
+   "name": "Nurse indicating chair to patient",
+   "dhash": "20282cadac2a2cac"
+  },
+  {
+   "file": "f1acf7869ee46e80.jpg",
+   "sha256": "f1acf7869ee46e800888954ec8a883e46803813b3f213b954c2f58add9abb463",
+   "kind": "scene",
+   "name": "Parent asking child about shoes",
+   "dhash": "149491913727070f"
+  },
+  {
+   "file": "2d12aa1c7e1ff526.jpg",
+   "sha256": "2d12aa1c7e1ff5260f97a227b6033b8fa30e841250c688ed9ab247cb0937bc7c",
+   "kind": "scene",
+   "name": "Parent asking child shoes rack",
+   "dhash": "181b5b1b1716070a"
+  },
+  {
+   "file": "8ffe7dc77f2ab9ad.jpg",
+   "sha256": "8ffe7dc77f2ab9ad8c1862cf5b233d1cb46e6a833fb8f0012fe388843ffa2af1",
+   "kind": "scene",
+   "name": "Passenger asking about",
+   "dhash": "0259494b19350e4b"
+  },
+  {
+   "file": "ee5d3d9fe36ba81b.jpg",
+   "sha256": "ee5d3d9fe36ba81b5200c49955b41fa135cad193a93407b6e781c8c7de5f5a5e",
+   "kind": "scene",
+   "name": "Passenger asking about approachi",
+   "dhash": "20082a363e2e0e20"
+  },
+  {
+   "file": "3e4c4a5e833ee7e6.jpg",
+   "sha256": "3e4c4a5e833ee7e6477a9f7a5b7f08f009272a2e212f260c60804a96d980336c",
+   "kind": "scene",
+   "name": "Passenger asking to move suitcase",
+   "dhash": "1111171713139313"
+  },
+  {
+   "file": "e57f310e4faffa34.jpg",
+   "sha256": "e57f310e4faffa34bea31f022c1c4d420df6858fe3ae42d3115c606b59ef7187",
+   "kind": "scene",
+   "name": "Passenger asking to move suitcase",
+   "dhash": "03b3ba3b23252732"
+  },
+  {
+   "file": "3fe4473f76696803.jpg",
+   "sha256": "3fe4473f766968039f5dbdde4003bbfd464a44d04a93e7de374b7379820cba01",
+   "kind": "scene",
+   "name": "Passenger holding closed umbrella",
+   "dhash": "1816161a16131316"
+  },
+  {
+   "file": "ac776724632785e4.jpg",
+   "sha256": "ac776724632785e404419302b8a31587ac9913eb7d1c8ef16ae835aa692d2ebd",
+   "kind": "scene",
+   "name": "Passenger holding closed umbrella",
+   "dhash": "981b524253131352"
+  },
+  {
+   "file": "ae36b581354e34f8.jpg",
+   "sha256": "ae36b581354e34f837d64d0afa6f89ba285de35dd5fce4f719bd92f31570c788",
+   "kind": "scene",
+   "name": "Passenger offering seat at",
+   "dhash": "5819595975575951"
+  },
+  {
+   "file": "e9673029f461a998.jpg",
+   "sha256": "e9673029f461a998ee96698789b181158cb9d14e34d1099b5a2cfca6438c4a93",
+   "kind": "scene",
+   "name": "Passenger offers seat at",
+   "dhash": "20383a3b232b3b23"
+  },
+  {
+   "file": "715dc2a456297380.jpg",
+   "sha256": "715dc2a456297380f5ec0419d1ffc934fd362e5d2c26a53ab28f342f26695ac4",
+   "kind": "scene",
+   "name": "Passenger showing card to driver",
+   "dhash": "0611313133731690"
+  },
+  {
+   "file": "4c35e5c25ee7712d.jpg",
+   "sha256": "4c35e5c25ee7712ded545880277299e1938ce8507696627d52477cf8afb9a463",
+   "kind": "scene",
+   "name": "Passenger showing ticket at station",
+   "dhash": "121695978f8d9717"
+  },
+  {
+   "file": "e877c20274285a3d.jpg",
+   "sha256": "e877c20274285a3d2a0b3cfd2783fbf59195ea8f592785c172e5bf53b5c248aa",
+   "kind": "scene",
+   "name": "Passenger showing ticket at station",
+   "dhash": "24232b232363632b"
+  },
+  {
+   "file": "3725aee771c4fbe5.jpg",
+   "sha256": "3725aee771c4fbe5c7adaa921814315f1e3557c335a7fd28cce79012d916b27d",
+   "kind": "scene",
+   "name": "Passenger showing transit card",
+   "dhash": "04a7a39333a7a511"
+  },
+  {
+   "file": "6f8afed4487b3ad5.jpg",
+   "sha256": "6f8afed4487b3ad5a56fe23d475371f909c03e3f0e027f11ac05177e75059a67",
+   "kind": "scene",
+   "name": "Person asking companion for photo",
+   "dhash": "5b58539756529216"
+  },
+  {
+   "file": "eedeced1a0fbaf52.jpg",
+   "sha256": "eedeced1a0fbaf523af8adf5657cf96ab4645f767900e1f10b368d3ac003ed43",
+   "kind": "scene",
+   "name": "Person asking for photo",
+   "dhash": "0009514e4b7156d6"
+  },
+  {
+   "file": "477fa8ea91a653c6.jpg",
+   "sha256": "477fa8ea91a653c69556e4a27405a8001fe0a8d5acd2ec20d8840f52a2cd924e",
+   "kind": "scene",
+   "name": "Person offering water in clinic",
+   "dhash": "1a5b131707b79795"
+  },
+  {
+   "file": "5f891f5131d7eb0a.jpg",
+   "sha256": "5f891f5131d7eb0ad5c01120ff85ccc20fbcc94ef4b1ad3c50a9d40c1a25214b",
+   "kind": "scene",
+   "name": "Person offering water in clinic",
+   "dhash": "185b5b1717171717"
+  },
+  {
+   "file": "6700afdb11c0c2e2.jpg",
+   "sha256": "6700afdb11c0c2e2178cbc3570b2b5f88026123a4cb1ea31943d9b9267cfe951",
+   "kind": "scene",
+   "name": "Player asking teammate about ball",
+   "dhash": "c1bb2ca929a9a830"
+  },
+  {
+   "file": "52f851f0cbc427ac.jpg",
+   "sha256": "52f851f0cbc427acc498cf3aeb10e1c8a4e2879813fc41028f8e9761820d8321",
+   "kind": "scene",
+   "name": "Player asks teammate retrieve ball",
+   "dhash": "30b5a43125252534"
+  },
+  {
+   "file": "16d915024dd580e8.jpg",
+   "sha256": "16d915024dd580e8d33df09dbf4c58b6f636b295174e1241ea5c018c7be8b9ad",
+   "kind": "scene",
+   "name": "Player borrowing racket at sports",
+   "dhash": "30bb333737252522"
+  },
+  {
+   "file": "8dea8edade679282.jpg",
+   "sha256": "8dea8edade679282d3a3a3098e260a011f6c8bfae5a4e319be7bc4b6a76d479e",
+   "kind": "scene",
+   "name": "Player borrowing racket in sports",
+   "dhash": "179613272723b333"
+  },
+  {
+   "file": "06808caffb7d5725.jpg",
+   "sha256": "06808caffb7d5725aa0f713e260690ba4d465f706f57e6d094b24b3fd2926577",
+   "kind": "scene",
+   "name": "Pupil asking classmate in library",
+   "dhash": "139596939b979393"
+  },
+  {
+   "file": "9d8202c71889d104.jpg",
+   "sha256": "9d8202c71889d104e084d92ea3b35b5e6a0293216bab2928e83f7022d0ea2653",
+   "kind": "scene",
+   "name": "Pupil asking librarian in library",
+   "dhash": "1093b3b2b7b3b3b3"
+  },
+  {
+   "file": "155aa05a3bac3fd3.jpg",
+   "sha256": "155aa05a3bac3fd3e5cddedd9cc128e2219a48c4f1be48892ce5f264aa2153d2",
+   "kind": "scene",
+   "name": "Pupil asks classmate to move",
+   "dhash": "101c17938b8f9393"
+  },
+  {
+   "file": "afd0f0971c05c1ed.jpg",
+   "sha256": "afd0f0971c05c1ed35ca5042851a055d4b3f4d5bb9df4bea6ce217aa047a078b",
+   "kind": "scene",
+   "name": "Pupil asks librarian return book",
+   "dhash": "00b3b3b3b3b3b3b2"
+  },
+  {
+   "file": "9e706734dd86c553.jpg",
+   "sha256": "9e706734dd86c553b8786d02d98f541a358221bd291d19104b487eb5fdf057e6",
+   "kind": "scene",
+   "name": "Pupil showing damaged book",
+   "dhash": "109292b22b232324"
+  },
+  {
+   "file": "47ce92044577b22d.jpg",
+   "sha256": "47ce92044577b22db3ee07e03e81b6c53b932b72c3c931f8f4dd5487ba1d129a",
+   "kind": "scene",
+   "name": "Pupil showing damaged library book",
+   "dhash": "109796b7333b3716"
+  },
+  {
+   "file": "e3a2cc6426851806.jpg",
+   "sha256": "e3a2cc6426851806740ba71471712d95ad04c0d99aa7ce967f3216b779565df3",
+   "kind": "scene",
+   "name": "Pupils whisper in school library",
+   "dhash": "1816169f97968716"
+  },
+  {
+   "file": "7d20534f019f284a.jpg",
+   "sha256": "7d20534f019f284acb80c68c997ed9fd939a80b77737ad4f66e4fa02ec181b41",
+   "kind": "scene",
+   "name": "Pupils whispering in school library",
+   "dhash": "03978797972f27b2"
+  },
+  {
+   "file": "33e36ad7dae35cec.jpg",
+   "sha256": "33e36ad7dae35cece80cb7ddc9ab1b83a23bf637ff10f64d7f5994ee055454e1",
+   "kind": "scene",
+   "name": "Railway employee assisting traveler",
+   "dhash": "041b131713171616"
+  },
+  {
+   "file": "57e1cf646dfd6def.jpg",
+   "sha256": "57e1cf646dfd6def275d08d77ac190316b4ffb47d84f6be634a6c18add0dd6f0",
+   "kind": "scene",
+   "name": "Railway employee directing traveler",
+   "dhash": "082a6e16364b1b03"
+  },
+  {
+   "file": "8061c6075cfbf17e.jpg",
+   "sha256": "8061c6075cfbf17ea868e97e11ab4a917e6b1d93c53977d2513529124cbf456a",
+   "kind": "scene",
+   "name": "Receptionist receiving parcel",
+   "dhash": "1856160696123616"
+  },
+  {
+   "file": "bc07564059c73972.jpg",
+   "sha256": "bc07564059c7397282c3e8ddeed6e94a1b4182577c0b909d82ffce3645a2f35c",
+   "kind": "scene",
+   "name": "Receptionist receiving parcel",
+   "dhash": "101696968e9a9393"
+  },
+  {
+   "file": "3fa7d5a36404fc60.jpg",
+   "sha256": "3fa7d5a36404fc6092b0a61469ebe5272c295da7cf474961a05c0f989c6c0994",
+   "kind": "scene",
+   "name": "Roommate holding wet towel",
+   "dhash": "1016160616929a1a"
+  },
+  {
+   "file": "887dc39fea47f451.jpg",
+   "sha256": "887dc39fea47f4519542889d65efd732a8e508ad55578dbd5d58e6e46d93569b",
+   "kind": "scene",
+   "name": "Roommate holding wet towel",
+   "dhash": "1096161217161212"
+  },
+  {
+   "file": "a2c374be8f773c80.jpg",
+   "sha256": "a2c374be8f773c8084ee851780e7388080efd782581987b4ec183cb6e10c034c",
+   "kind": "scene",
+   "name": "Runner returning dropped glove",
+   "dhash": "1016131313331312"
+  },
+  {
+   "file": "c5c1e19f395d6719.jpg",
+   "sha256": "c5c1e19f395d6719bb38fa9e0eb8a5f7c549df9d1900eae36b36a950cd692b8f",
+   "kind": "scene",
+   "name": "Runner returning dropped glove",
+   "dhash": "11909212b3335313"
+  },
+  {
+   "file": "d39f4bbaf70403c9.jpg",
+   "sha256": "d39f4bbaf70403c9e242542a7becb6e3cb7b30d0362bc5f10012a02d38042bb4",
+   "kind": "scene",
+   "name": "Shopper and clerk in store",
+   "dhash": "10123213131333b3"
+  },
+  {
+   "file": "0fde0adfe6a5c9ae.jpg",
+   "sha256": "0fde0adfe6a5c9ae0c45500fe6c1960cb60fde081e96846f8f73adfb138956bf",
+   "kind": "scene",
+   "name": "Shopper asking clerk for basket",
+   "dhash": "0313961727060713"
+  },
+  {
+   "file": "c1d6cdfd2958274b.jpg",
+   "sha256": "c1d6cdfd2958274b2e9f8e724d5ae8d1fa48c5d87adab040d2e19d55f830834a",
+   "kind": "scene",
+   "name": "Shopper asking clerk for basket",
+   "dhash": "212b2f2f23232323"
+  },
+  {
+   "file": "91ff205a77f9ddc2.jpg",
+   "sha256": "91ff205a77f9ddc298251fda42e1f4162e6eaae719e47f43ba3a4b1006fff008",
+   "kind": "scene",
+   "name": "Shopper asking clerk in supermarket",
+   "dhash": "16068606b6969692"
+  },
+  {
+   "file": "f9a5848a396b3b44.jpg",
+   "sha256": "f9a5848a396b3b448e6e5a7846bb45ec6e764e432fe5da39026a2336237b164a",
+   "kind": "scene",
+   "name": "Shopper asking clerk in supermarket",
+   "dhash": "2c2f1b332b2b2b33"
+  },
+  {
+   "file": "c28c5b33cffa9e61.jpg",
+   "sha256": "c28c5b33cffa9e61bc52d91662bd1b5cfc09318e44c380e18b7d3989f28ac5d0",
+   "kind": "scene",
+   "name": "Shopper handing apple to cashier",
+   "dhash": "1016120e0e3b171e"
+  },
+  {
+   "file": "7c26e5fc9be981a5.jpg",
+   "sha256": "7c26e5fc9be981a57bad9ca76f9438f447952f90e71b7afc379993b80383f910",
+   "kind": "scene",
+   "name": "Shopper hands apple to cashier",
+   "dhash": "1016169686139616"
+  },
+  {
+   "file": "037b48a1a802ac82.jpg",
+   "sha256": "037b48a1a802ac82fdeef4d15edb495379fab11545dc424538a63016bcced4a6",
+   "kind": "scene",
+   "name": "Shopper showing clerk wrong shoes",
+   "dhash": "9096b69213b39292"
+  },
+  {
+   "file": "9c05755057dae62b.jpg",
+   "sha256": "9c05755057dae62b4d05ac8081dc1327b262fa778c6f1e620f318ee4f664fb97",
+   "kind": "scene",
+   "name": "Shopper showing wrong shoe size",
+   "dhash": "1856131a131b9212"
+  },
+  {
+   "file": "4f516e6d60881ec7.jpg",
+   "sha256": "4f516e6d60881ec74cc78e44a625e5be39b41c037b09d09fff6b7c44493018e0",
+   "kind": "scene",
+   "name": "Shopper speaking to clothing clerk",
+   "dhash": "1016161617171796"
+  },
+  {
+   "file": "2d539ae687cdc964.jpg",
+   "sha256": "2d539ae687cdc964f985e4fa4b93c7163eaa1dc9aac334d9381e09cd66ea1953",
+   "kind": "scene",
+   "name": "Student asking classmate for eraser",
+   "dhash": "151212b333333533"
+  },
+  {
+   "file": "d569245c109196a6.jpg",
+   "sha256": "d569245c109196a6c27a1d06c71a3fe1b32d64760ed03c8797ab330af0a308c3",
+   "kind": "scene",
+   "name": "Student asking classmate for eraser",
+   "dhash": "119392b236173333"
+  },
+  {
+   "file": "c3f15b36d1f4d097.jpg",
+   "sha256": "c3f15b36d1f4d097cb0c07cffcdfe36d4f1accb78ddf76d8299a8863ecccbf8f",
+   "kind": "scene",
+   "name": "Student pointing at classroom",
+   "dhash": "61384b1b1b2149c9"
+  },
+  {
+   "file": "2139d835bbb3b457.jpg",
+   "sha256": "2139d835bbb3b457898af5d73b2c6fcab2f2f4850927d6d292ee901c7f76165a",
+   "kind": "scene",
+   "name": "Student pointing to window",
+   "dhash": "7933133b33674b1a"
+  },
+  {
+   "file": "8bb036f7e2f2e623.jpg",
+   "sha256": "8bb036f7e2f2e623dd035d329c80265c1294b2917d54d633dc940f8c8b2094c4",
+   "kind": "scene",
+   "name": "Student raising hand in classroom",
+   "dhash": "526c33337b333316"
+  },
+  {
+   "file": "e24a1d4e421906f3.jpg",
+   "sha256": "e24a1d4e421906f33e2ecad893b30596241360584ab72bc9ca504a13bc91e630",
+   "kind": "scene",
+   "name": "Student raising hand in classroom",
+   "dhash": "6058939b1b131353"
+  },
+  {
+   "file": "5c39b1ccaf6014c4.jpg",
+   "sha256": "5c39b1ccaf6014c4bda94c9caf3d5637c3a274029f1356dc993daf1c208ab0ef",
+   "kind": "scene",
+   "name": "Student returns borrowed ruler",
+   "dhash": "585b179697a7b6a6"
+  },
+  {
+   "file": "4dc89155e9d20b81.jpg",
+   "sha256": "4dc89155e9d20b81e0c37905cba1a3e33528542256066a6b1dea3d56219f4765",
+   "kind": "scene",
+   "name": "Student returns ruler in classroom",
+   "dhash": "151392b3979393b2"
+  },
+  {
+   "file": "a7e55f08e616ab83.jpg",
+   "sha256": "a7e55f08e616ab83445de4fb1803fe97ed73afe1af2e4ac98de7bf059a0613c3",
+   "kind": "scene",
+   "name": "Swimmer showing goggles to staff",
+   "dhash": "24a6221317272b0b"
+  },
+  {
+   "file": "e55b60ef0142fecd.jpg",
+   "sha256": "e55b60ef0142fecd5fffafdbf6d008c9e080fc47c81f8c72a692190ffc954c95",
+   "kind": "scene",
+   "name": "Swimmer showing goggles to staff",
+   "dhash": "02b7af979f97b632"
+  },
+  {
+   "file": "4c247715ae01a60a.jpg",
+   "sha256": "4c247715ae01a60a149c6eccdafa68fa34661ae8c63d0ce38987964262427713",
+   "kind": "scene",
+   "name": "Traveler asking attendant for",
+   "dhash": "3a3a171717363636"
+  },
+  {
+   "file": "93d73930f6d4fe38.jpg",
+   "sha256": "93d73930f6d4fe381d0432fb3fc6a88d08b46c6e5e5da4de882a1344718677a9",
+   "kind": "scene",
+   "name": "Traveler asking attendant for",
+   "dhash": "3836169793161616"
+  },
+  {
+   "file": "4d4c27e6601b25eb.jpg",
+   "sha256": "4d4c27e6601b25ebfe1c13a009f38a8fee4d8683999e3dab94ea6490519e260b",
+   "kind": "scene",
+   "name": "Visitor asking attendant about",
+   "dhash": "10b4b3b31b1b3333"
+  },
+  {
+   "file": "70cf363e49520a6c.jpg",
+   "sha256": "70cf363e49520a6cd5568abf153762833733b2debb356fe9d516d3aa5a06ce11",
+   "kind": "scene",
+   "name": "Visitor asking attendant about",
+   "dhash": "b0abab3b332333b3"
+  },
+  {
+   "file": "1e14ff369a30e24b.jpg",
+   "sha256": "1e14ff369a30e24bea71237218b0804e9018c18e3aaa4f3b5fddead233ecc61a",
+   "kind": "scene",
+   "name": "Visitor asking clerk about",
+   "dhash": "24232b33636b6623"
+  },
+  {
+   "file": "e00ca357404b70e7.jpg",
+   "sha256": "e00ca357404b70e71b99046261fed1694f98e99a408b0a7e2068df72e6671f28",
+   "kind": "scene",
+   "name": "Visitor asking clerk about",
+   "dhash": "a432b3233b372731"
+  },
+  {
+   "file": "20c04f78326629ae.jpg",
+   "sha256": "20c04f78326629aedc8de771ba66ef6d4e39bc0ca06e21966de396beae09d99f",
+   "kind": "scene",
+   "name": "Visitor asking groundskeeper",
+   "dhash": "282b2b293b2b2b2b"
+  },
+  {
+   "file": "eada176ec549312c.jpg",
+   "sha256": "eada176ec549312c17383473d81181dfac688d87a1c5a468047202a3b4818493",
+   "kind": "scene",
+   "name": "Visitor asking groundskeeper",
+   "dhash": "10949292b3b38292"
+  },
+  {
+   "file": "86112309b039e878.jpg",
+   "sha256": "86112309b039e8782e28de6b598bde0ceae4c30293b2810feaf66a186d9e0f15",
+   "kind": "scene",
+   "name": "Visitor asking receptionist in",
+   "dhash": "222423233b23232d"
+  },
+  {
+   "file": "54e571b64a3d7b20.jpg",
+   "sha256": "54e571b64a3d7b20864c2ed2fe909050090ef90e765ed699e58614f50c540169",
+   "kind": "scene",
+   "name": "Visitor asks companion about",
+   "dhash": "6856d6925a575756"
+  },
+  {
+   "file": "ce0a79605d45f143.jpg",
+   "sha256": "ce0a79605d45f1435dfd8f9d50aa7b05cbc172c650650f574e731a8e5a99d740",
+   "kind": "scene",
+   "name": "Visitor asks companion about",
+   "dhash": "086a666e66070f46"
+  },
+  {
+   "file": "c1ed737f393d5ad1.jpg",
+   "sha256": "c1ed737f393d5ad14fe38886b4b8ac8dddb5b22ba3f51c14e8c740b66ef5b4b8",
+   "kind": "scene",
+   "name": "Visitor asks receptionist in clinic",
+   "dhash": "2030323327232922"
+  },
+  {
+   "file": "594c3a41b003fdf8.jpg",
+   "sha256": "594c3a41b003fdf86c7860b27ee860b241965acd33b4cebda70496793060b160",
+   "kind": "scene",
+   "name": "Visitor handing card to clerk",
+   "dhash": "109292b23f273733"
+  },
+  {
+   "file": "404220d96c534841.jpg",
+   "sha256": "404220d96c5348414c369cbc7a94f4f09758a8b3ec689bc9fda2913e3ee0302c",
+   "kind": "scene",
+   "name": "Visitor hands card to clerk",
+   "dhash": "119393b397131393"
+  },
+  {
+   "file": "1a6089f39f6ff0b8.jpg",
+   "sha256": "1a6089f39f6ff0b80fc59857ec5dfc495100ab42c58da0d3997ecbabf0f3ea40",
+   "kind": "scene",
+   "name": "Worker asking colleague to close",
+   "dhash": "1393931313131313"
+  },
+  {
+   "file": "d0eee4910696425c.jpg",
+   "sha256": "d0eee4910696425c706e789aafe8be7d27b22d942bf8b9ace8afe1dea3715391",
+   "kind": "scene",
+   "name": "Worker asking colleague to close",
+   "dhash": "015913593b1b5b9b"
+  }
+ ]
+}
