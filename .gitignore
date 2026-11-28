@@ -14,4 +14,5 @@ src-tauri/target/
 *.jpeg
 
 !assets/part1-photos/*.jpg
+!assets/jlpt-images/*.jpg
 __pycache__/
