@@ -8,7 +8,11 @@ use std::{
 };
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
+};
 
 struct Backend(Mutex<Child>);
 
@@ -21,12 +25,33 @@ impl Drop for Backend {
     }
 }
 
+/// Brings the main window back from the tray (or from behind other windows).
+fn show_main(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 fn main() {
     let result = tauri::Builder::default()
+        // A second launch (e.g. from the Start menu while the app sits in the tray) only reopens the window.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
+        // Closing the window keeps Mark & Listen running in the tray; "종료" in the tray menu quits.
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let _ = window.hide();
+                api.prevent_close();
+            }
+        })
         .setup(|app| {
             let resources = app.path().resource_dir()?;
+            #[cfg(windows)]
             let runtime = resources.join("runtime/node.exe");
-            let entry = "app/src/start-beta.mjs";
+            #[cfg(not(windows))]
+            let runtime = resources.join("runtime/node");
+            let entry = "app/src/main.mjs";
             for file in [&runtime, &resources.join(entry)] {
                 if !file.is_file() {
                     return Err(io::Error::new(
@@ -50,23 +75,46 @@ fn main() {
             let app_handle = app.handle().clone();
             std::thread::spawn(move || {
                 for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-                    if line == "MARK_READY:4175" {
-                        let _ = tx.send(());
+                    if let Some(port) = line.strip_prefix("MARK_READY:").and_then(|p| p.parse::<u16>().ok()) {
+                        let _ = tx.send(port);
                     } else if line == "MARK_INSTALL_READY" {
                         app_handle.exit(0);
                     }
                 }
             });
-            rx.recv_timeout(Duration::from_secs(30))
+            let port = rx.recv_timeout(Duration::from_secs(30))
                 .map_err(|err| io::Error::other(format!("Installed backend did not signal readiness: {err}")))?;
 
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::External("http://127.0.0.1:4175".parse()?))
-                .title("Mark & Listen 0.1.1.0 Beta")
+            let origin = format!("http://127.0.0.1:{port}");
+            WebviewWindowBuilder::new(app, "main", WebviewUrl::External(origin.parse()?))
+                .title("Mark & Listen")
                 .inner_size(1320.0, 900.0).min_inner_size(850.0, 600.0)
-                .on_navigation(|url| url.scheme() == "http" && url.host_str() == Some("127.0.0.1") && url.port() == Some(4175))
+                .on_navigation(move |url| url.scheme() == "http" && url.host_str() == Some("127.0.0.1") && url.port() == Some(port))
                 .build()
                 .map_err(|err| io::Error::other(format!("Could not open the WebView2 window: {err}")))?;
             app.manage(backend);
+
+            let open = MenuItem::with_id(app, "open", "Mark & Listen 열기", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&open, &quit])?;
+            let mut tray = TrayIconBuilder::with_id("main")
+                .tooltip("Mark & Listen")
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    "open" => show_main(app),
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                        show_main(tray.app_handle());
+                    }
+                });
+            if let Some(icon) = app.default_window_icon() {
+                tray = tray.icon(icon.clone());
+            }
+            tray.build(app)?;
             Ok(())
         })
         .build(tauri::generate_context!());
@@ -79,6 +127,11 @@ fn main() {
         }
     };
     app.run(|app, event| {
+        // macOS: clicking the Dock icon brings back the window that closing only hid.
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Reopen { .. } = event {
+            show_main(app);
+        }
         if matches!(event, tauri::RunEvent::Exit) {
             if let Some(backend) = app.try_state::<Backend>() {
                 if let Ok(mut child) = backend.0.lock() {

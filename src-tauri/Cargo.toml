@@ -1,11 +1,12 @@
 [package]
 name = "mark-and-listen"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-single-instance = "2"
 [profile.release]
 strip = true
 lto = true

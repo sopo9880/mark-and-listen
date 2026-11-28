@@ -1,163 +1,28 @@
 <!doctype html>
 <html lang="ko">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#f4f5f0">
-<title>Mark &amp; Listen | 토익 연습실</title>
-<link rel="stylesheet" href="/styles.css">
-<script type="module" src="/app.mjs"></script>
-</head>
-<body>
-<div class="workspace">
-  <aside class="sidebar">
-    <a class="brand" href="#home" aria-label="Mark and Listen"><span class="brand-icon" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Mark <em>&amp;</em> Listen</a>
-    <p class="nav-label">WORKSPACE</p>
-    <nav class="nav" aria-label="메인 메뉴">
-      <a href="#home" data-route="home" aria-current="page"><span aria-hidden="true">◫</span>대시보드</a>
-      <a href="#exam" data-route="exam"><span aria-hidden="true">◉</span>시험 연습</a>
-      <a href="#generate" data-route="generate"><span aria-hidden="true">✧</span>문제 제작</a>
-      <a href="#history" data-route="history"><span aria-hidden="true">◎</span>기록 · 복습</a>
-      <a href="#settings" data-route="settings"><span aria-hidden="true">⚙</span>설정</a>
-    </nav>
-    <div class="side-bottom">
-      <p class="local-status"><b></b> 로컬 학습 공간</p>
-      <p class="version">개발 빌드 <span>0.0.0.2</span></p>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Mark &amp; Listen</title>
+    <link rel="icon" href="/logo.png" />
+    <link rel="stylesheet" href="/lucian.css" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/theme-boot.mjs"></script>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar" aria-label="주 메뉴">
+        <a class="brand" href="#/home">
+          <img src="/logo.png" alt="" width="40" height="40" />
+          <span><strong>Mark &amp; Listen</strong><small id="build">시험 대비 스튜디오</small></span>
+        </a>
+        <nav id="nav"></nav>
+        <div id="job" class="job" hidden></div>
+        <div id="connections" class="connections" aria-live="polite"></div>
+      </aside>
+      <main id="main" tabindex="-1"></main>
     </div>
-  </aside>
-  <div class="workarea">
-    <header class="top worktop">
-      <div class="frame bar">
-        <p class="trail">MY STUDY ROOM <span>›</span> <strong id="top-route">대시보드</strong></p>
-        <a href="#generate" class="button light settings"><span aria-hidden="true">✧</span> 문제 만들기</a>
-      </div>
-    </header>
-    <main class="frame">
-      <section id="view-home" class="view">
-        <div class="dash-intro">
-          <div><p class="eyebrow">OVERVIEW / STUDY ROOM</p><h1>대시보드<span>.</span></h1><p>오늘의 연습과 최근 학습 기록을 한곳에서 확인하세요.</p></div>
-          <a href="#exam" class="button primary" id="main-exam-link">시험 연습 시작</a>
-        </div>
-        <section class="dashboard-metrics" id="dashboard-metrics" aria-label="학습 통계"></section>
-        <div class="dashboard-grid">
-          <section class="surface dash-card" aria-labelledby="active-title">
-            <div class="section-heading"><div><p class="eyebrow">ACTIVE PRACTICE</p><h2 id="active-title">지금 풀기</h2></div><span class="chip" id="active-mode"></span></div>
-            <h3 id="active-name"></h3><p id="active-description" class="muted"></p>
-            <progress class="progress" id="active-progress" aria-label="진행 중 세트 마킹 현황"></progress>
-            <div class="dashboard-actions">
-              <a href="#exam" class="button primary" id="continue-exam">시험 연습 시작</a>
-              <button type="button" class="button light" id="quick-strict">실전 OMR 시작</button>
-              <a href="#full" class="button light">전체 200문항</a>
-            </div>
-          </section>
-          <section class="surface dash-card" aria-labelledby="trend-title">
-            <div class="section-heading"><div><p class="eyebrow">SECTION ACCURACY</p><h2 id="trend-title">영역별 정답률</h2></div></div>
-            <div id="dashboard-accuracy"></div>
-          </section>
-          <section class="surface dash-card full card-recent" aria-labelledby="recent-title">
-            <div class="section-heading"><div><p class="eyebrow">ACTIVITY LOG</p><h2 id="recent-title">최근 제출</h2></div><a class="button light" href="#history">전체 기록</a></div>
-            <div id="dashboard-recent"></div>
-          </section>
-        </div>
-      </section>
-      <section id="view-exam" class="view" hidden>
-        <div class="intro">
-          <div><p class="eyebrow">PRACTICE / WORKSHEET</p><h1>시험 연습<span>.</span></h1><p id="session-label"></p></div>
-          <div class="session-tools">
-            <div class="switch" aria-label="연습 모드 선택">
-              <button id="practice-mode" aria-pressed="true">연습 모드</button>
-              <button id="strict-mode" aria-pressed="false">실전 OMR</button>
-            </div>
-            <button class="button light" id="reset">새로 풀기</button>
-            <a href="#full" class="button light">전체 200문항</a>
-          </div>
-        </div>
-        <div class="layout">
-          <section id="question" class="question surface" aria-label="문제"></section>
-          <aside id="sheet" class="sheet surface" aria-label="OMR 답안지"></aside>
-        </div>
-        <section id="results" class="results" aria-label="채점 결과" hidden></section>
-      </section>
-      <section id="view-full" class="view" hidden>
-        <div class="dash-intro"><div><p class="eyebrow">EXAM / 200 QUESTIONS</p><h1>전체 모의고사<span>.</span></h1><p>LC 45분 · RC 75분 · 모든 답안은 OMR에서 직접 마킹합니다.</p></div><a href="#exam" class="button light">간단 연습으로</a></div>
-        <div id="full-exam-mount"><p class="muted">시험 데이터를 읽고 있어요.</p></div>
-      </section>
-      <section id="view-generate" class="view" hidden>
-        <div class="dash-intro"><div><p class="eyebrow">STUDIO / GENERATE</p><h1>문제 제작<span>.</span></h1><p>엔진을 선택해 나만의 RC Part 5 연습 문제를 만드세요.</p></div></div>
-        <div class="dashboard-grid">
-          <section class="surface dash-card engine-card">
-            <p class="eyebrow">TEXT STUDIO</p><h2>문항 생성</h2>
-            <label for="provider">엔진</label>
-            <select id="provider">
-              <option value="codex">Codex · ChatGPT 계정</option>
-              <option value="openai">GPT · OpenAI API 키</option>
-              <option value="gemini">Gemini · Google API 키</option>
-            </select>
-            <p id="provider-hint" class="hint"></p>
-            <div id="api-fields" hidden>
-              <label for="api-key">API 키</label>
-              <input id="api-key" type="password" placeholder="보관하지 않고 이번 요청에만 사용" autocomplete="off">
-              <label for="model">모델 ID <small>(선택)</small></label>
-              <input id="model" placeholder="비우면 기본 모델 사용" maxlength="80" autocomplete="off">
-            </div>
-            <div class="dashboard-actions">
-              <button class="button primary" id="generate">RC 문제 3개 만들기</button>
-              <button class="button light" id="activate-generated" hidden>새 문제 열기</button>
-              <button class="button light" id="activate-bank" hidden>기본 세트로</button>
-            </div>
-            <p id="engine-message" class="hint" aria-live="polite"></p>
-            <div class="studio-files">
-              <button class="button light" id="import-set">RC 세트 JSON 가져오기</button>
-              <button class="button light" id="export-set" disabled>RC 세트 JSON 저장</button>
-              <input type="file" id="import-file" accept=".json,application/json" hidden>
-            </div>
-          </section>
-          <section class="surface dash-card" aria-labelledby="studio-notice">
-            <p class="eyebrow">WORKFLOW</p><h2 id="studio-notice">제작 안내</h2>
-            <ol class="studio-steps"><li>엔진을 선택하고 필요한 연결을 확인하세요.</li><li>새 RC Part 5 3문항의 형식을 검사합니다.</li><li>새 세트를 열기 전까지 지금 풀던 문제는 유지됩니다.</li></ol>
-            <p class="notice">AI 문항은 정답의 정확성과 자연스러운 문장을 별도로 검수해야 합니다.</p>
-            <a class="button light" href="#settings">Codex 런타임 설정</a>
-          </section>
-          <div class="full" id="audition-mount"></div>
-        </div>
-      </section>
-      <section id="view-history" class="view" hidden>
-        <div class="dash-intro"><div><p class="eyebrow">LIBRARY / REVIEW</p><h1>기록 · 복습<span>.</span></h1><p>채점한 세트를 다시 열어 틀린 문제와 해설을 확인하세요.</p></div></div>
-        <section class="surface dash-card">
-          <div class="section-heading"><h2>제출 기록</h2><label class="filter">보기 <select id="history-filter"><option value="all">전체</option><option value="bank">기본 세트</option><option value="generated">AI 세트</option><option value="full">전체 모의고사</option></select></label></div>
-          <div id="history-list"></div>
-        </section>
-        <section id="history-review" class="results" aria-label="이전 제출 복습" hidden></section>
-      </section>
-      <section id="view-settings" class="view" hidden>
-        <div class="dash-intro"><div><p class="eyebrow">PREFERENCES / LOCAL APP</p><h1>설정<span>.</span></h1><p>엔진 연결과 이 기기의 학습 데이터를 관리하세요.</p></div></div>
-        <div class="dashboard-grid">
-          <section class="surface dash-card" id="codex-fields">
-            <p class="eyebrow">CODEX RUNTIME</p><h2>Codex 런타임</h2>
-            <p id="codex-status" class="hint">설치 상태를 확인하는 중입니다.</p><p id="codex-login" class="hint"></p>
-            <div class="actions">
-              <button class="button light" id="install-pinned">지정 버전 설치</button>
-              <button class="button light" id="check-version">새 버전 확인</button>
-              <button class="button light" id="install-latest" hidden>최신 버전 설치</button>
-              <button class="button light" id="rollback" hidden>이전 버전 복원</button>
-            </div>
-            <p id="runtime-message" class="hint" aria-live="polite"></p>
-          </section>
-          <section class="surface dash-card">
-            <p class="eyebrow">DEVICE DATA</p><h2>로컬 학습 기록</h2>
-            <p class="muted">현재 세트와 제출 기록은 이 실행 주소의 브라우저 저장소에 있습니다. 기본 세트와 채점은 인터넷 없이 이용할 수 있어요.</p>
-            <button class="button light" id="clear-history">제출 기록 삭제</button>
-            <p id="data-message" class="hint" aria-live="polite"></p>
-          </section>
-        </div>
-      </section>
-      <footer class="foot">
-        <span>독립 제작 학습 도구 · 공식 TOEIC 시험과 무관합니다.</span>
-        <span>Mark &amp; Listen 0.0.0.2</span>
-      </footer>
-    </main>
-  </div>
-</div>
-<noscript>이 앱은 JavaScript가 필요합니다.</noscript>
-</body>
+    <script type="module" src="/app.mjs"></script>
+  </body>
 </html>

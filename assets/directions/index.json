@@ -1,0 +1,242 @@
+{
+ "schema": 1,
+ "voice": "Charon",
+ "model": "gemini-2.5-flash-native-audio-preview-12-2025",
+ "processing": "edges trimmed to 0.12 s / 0.25 s, active-speech RMS -20 dBFS, peak <= -1 dBFS, 10 ms fades",
+ "clips": {
+  "lc-intro": {
+   "file": "lc-intro.wav",
+   "text": "Listening Test. In this part of the test, you will listen to statements, questions, conversations, and short talks in English, and then answer questions about what you heard. The Listening Test has four parts and takes about forty-five minutes. Each part begins with its own directions. Mark all of your answers on the answer sheet.",
+   "duration": 21.24,
+   "sha256": "9520c4b3c98af6f693d2652d4d6932cb85c35c092397eee3edd150405d44bc34"
+  },
+  "p1-directions": {
+   "file": "p1-directions.wav",
+   "text": "Part One. Directions. For each question in this part, you will see a photograph in your test book and hear four statements about it. Choose the one statement that best describes the photograph, and mark your answer on the answer sheet. The statements are not printed in your test book, and you will hear them only one time.",
+   "duration": 19.98,
+   "sha256": "724a2ebebee478fbe1515fc96e7048810f008dcf7379e3bc7f3120733df1e84e"
+  },
+  "p3-directions": {
+   "file": "p3-directions.wav",
+   "text": "Part Three. Directions. In this part, you will hear short conversations between two or more people. After each conversation, you will hear three questions about it. Choose the best answer to each question and mark it on the answer sheet. Some questions refer to a graphic in your test book. You will hear each conversation only one time.",
+   "duration": 24.94,
+   "sha256": "3769ca3c2d1a0798d26650b7753477105d3331ce870c5323608b2b62c0228072"
+  },
+  "p4-directions": {
+   "file": "p4-directions.wav",
+   "text": "Part Four. Directions. In this part, you will hear short talks given by one speaker. After each talk, you will hear three questions about it. Choose the best answer to each question and mark it on the answer sheet. Some questions refer to a graphic in your test book. You will hear each talk only one time.",
+   "duration": 21.07,
+   "sha256": "353f5cd53f1bb8d3936a42462eaf07ede1239fca255cf76ea853408e9e861a6e"
+  },
+  "num-7": {
+   "file": "num-7.wav",
+   "text": "Number seven.",
+   "duration": 1.36,
+   "sha256": "2b5d0028deb2dfef0e719a465c3f5fa6b61fe76aaac4703ecccb50093c4d9214"
+  },
+  "num-13": {
+   "file": "num-13.wav",
+   "text": "Number thirteen.",
+   "duration": 1.52,
+   "sha256": "bbe02f929f3b96f4aab7cda7dd74c4a2b1dd0d3df547f0d65b152934301ab465"
+  },
+  "num-21": {
+   "file": "num-21.wav",
+   "text": "Number twenty-one.",
+   "duration": 1.71,
+   "sha256": "33a1e99ba1bf3b8706192f8df82c46cda2a93360d54e374632358b27c78746b5"
+  },
+  "num-9": {
+   "file": "num-9.wav",
+   "text": "Number nine.",
+   "duration": 1.21,
+   "sha256": "cf898d59c9aeaa279e95bf86b21459b4047f578a750aa47fe2cf490909d934a1"
+  },
+  "num-10": {
+   "file": "num-10.wav",
+   "text": "Number ten.",
+   "duration": 1.18,
+   "sha256": "d988bc2714767748adf65ec03b069a91b0437614ec8d6ecd02bedcdbc2a5496c"
+  },
+  "num-11": {
+   "file": "num-11.wav",
+   "text": "Number eleven.",
+   "duration": 1.31,
+   "sha256": "ed5a8ca9b0f0573507958ff2a3061926c70ad485732f0ef9870ef79e345bc322"
+  },
+  "num-12": {
+   "file": "num-12.wav",
+   "text": "Number twelve.",
+   "duration": 1.34,
+   "sha256": "bb9f304aa7a5d8d7e10d06a7f06ef684d34bcfb5cff814ea3865f48dc30e0e99"
+  },
+  "num-14": {
+   "file": "num-14.wav",
+   "text": "Number fourteen.",
+   "duration": 1.44,
+   "sha256": "939f1fc1f91cb69ce18a455762198c9114ce56e2b75199cf05ab2d970e9929f1"
+  },
+  "num-15": {
+   "file": "num-15.wav",
+   "text": "Number fifteen.",
+   "duration": 1.44,
+   "sha256": "f87176d7d1f86a94e2e76a673fd06db6f3022b0e7df307f47d48776d08a53877"
+  },
+  "num-16": {
+   "file": "num-16.wav",
+   "text": "Number sixteen.",
+   "duration": 1.4,
+   "sha256": "2a1b84523ac5a706287d93cecd7abf3fb1c10145cfc171abd7c61ec1be89d5dd"
+  },
+  "num-17": {
+   "file": "num-17.wav",
+   "text": "Number seventeen.",
+   "duration": 1.43,
+   "sha256": "ad0908434a0010415de4bb8539873ccfa51aa913d85bee38e4f8f882f3e80dad"
+  },
+  "num-18": {
+   "file": "num-18.wav",
+   "text": "Number eighteen.",
+   "duration": 1.42,
+   "sha256": "b6b096f8af7b4500d7200c826a9d5695ac45fb07bc3845f7dd061c4020430679"
+  },
+  "num-19": {
+   "file": "num-19.wav",
+   "text": "Number nineteen.",
+   "duration": 1.43,
+   "sha256": "05311f01e5dbe02477bc7d7584e56cb795ce1dc88be088a8260ffd0001db6d6f"
+  },
+  "num-20": {
+   "file": "num-20.wav",
+   "text": "Number twenty.",
+   "duration": 1.29,
+   "sha256": "b56dfa40c58ffd7235126c2e25fb308ee031d21065a20a1dee1a56257147ef28"
+  },
+  "num-22": {
+   "file": "num-22.wav",
+   "text": "Number twenty-two.",
+   "duration": 1.48,
+   "sha256": "83faa7e084213827c0dc1822c408c874a99004f4323012ae33afaf7745a1c0a5"
+  },
+  "num-23": {
+   "file": "num-23.wav",
+   "text": "Number twenty-three.",
+   "duration": 1.48,
+   "sha256": "71c3d923af7da65ae42419f94a1e67e90f4ac64cf5e3e3f54e72355ccc2a9b4a"
+  },
+  "num-24": {
+   "file": "num-24.wav",
+   "text": "Number twenty-four.",
+   "duration": 1.6,
+   "sha256": "a3f3bd0ba45c1cfc971b94a435bd5ac1c10acbe175615eb6f83d0dd77d563adf"
+  },
+  "num-25": {
+   "file": "num-25.wav",
+   "text": "Number twenty-five.",
+   "duration": 1.85,
+   "sha256": "6fd30e9f835d357e54042871fbbe7e1d79018a00df9d0325b0e87a79543b1f86"
+  },
+  "num-26": {
+   "file": "num-26.wav",
+   "text": "Number twenty-six.",
+   "duration": 1.71,
+   "sha256": "f224686760ccc1822c6cc49449f86a9f7834ed15b61577a4e996d41dbb341443"
+  },
+  "num-27": {
+   "file": "num-27.wav",
+   "text": "Number twenty-seven.",
+   "duration": 1.64,
+   "sha256": "c4e5c321d86b32dd5cc8f0c9660118eb3c31710e9a22b567849478cb8ed4263a"
+  },
+  "num-28": {
+   "file": "num-28.wav",
+   "text": "Number twenty-eight.",
+   "duration": 1.76,
+   "sha256": "b601173ee3876739387fba3132475166b19e83b5839d3327d9e47743e749c59a"
+  },
+  "num-30": {
+   "file": "num-30.wav",
+   "text": "Number thirty.",
+   "duration": 1.32,
+   "sha256": "16581cf7ea499b618a28b8e7bf17e27e1bcc4b3346590077c542cfeee9301e04"
+  },
+  "num-31": {
+   "file": "num-31.wav",
+   "text": "Number thirty-one.",
+   "duration": 1.47,
+   "sha256": "9b2b2b3d0e10ac5c9fb8e05d91f30f355dd212f55f6fbbd9df8b562e1bea31a2"
+  },
+  "p2-directions": {
+   "file": "p2-directions.wav",
+   "text": "Part Two. Directions. In this part, you will hear a question or a statement, followed by three responses. Choose the best response and mark your answer on the answer sheet. The question and the responses are not printed in your test book, and you will hear them only one time. We will now begin with question number seven.",
+   "duration": 21.77,
+   "sha256": "b7e724ce89d5a79bbd86aa69e0c6913c5a4f6868d4b14f5364b2a76de06cd0a1"
+  },
+  "lc-end": {
+   "file": "lc-end.wav",
+   "text": "This is the end of the Listening Test. Please turn to Part Five in your test book.",
+   "duration": 5.92,
+   "sha256": "45576565e6ef56dfc08510e98bf6697b612a745074cd42f45b60703c821cf673"
+  },
+  "p1-begin": {
+   "file": "p1-begin.wav",
+   "text": "Part One begins now.",
+   "duration": 1.99,
+   "sha256": "b4d789752c3f59fc7fba16775469d8e7db03621ed806bec446e5ee6f900c2d0c"
+  },
+  "next-page": {
+   "file": "next-page.wav",
+   "text": "Please turn to the next page.",
+   "duration": 2.1,
+   "sha256": "bebabf41e593aeaa02d62ab03a2636123c5d3ad6007bc6d9c6ae6665668114fd"
+  },
+  "num-1": {
+   "file": "num-1.wav",
+   "text": "Number one. Look at picture number one in your test book.",
+   "duration": 4.28,
+   "sha256": "49e014aefa8fcb7e31174c9570227ff9b43f4760ac30f8dea71cf42e70ff39e3"
+  },
+  "num-2": {
+   "file": "num-2.wav",
+   "text": "Number two. Look at picture number two in your test book.",
+   "duration": 4.26,
+   "sha256": "d84cd8fa117a4ce47129f8537056424b1e7ba29822251445426f82226194f4a1"
+  },
+  "num-3": {
+   "file": "num-3.wav",
+   "text": "Number three. Look at picture number three in your test book.",
+   "duration": 4.25,
+   "sha256": "55a66a6d184248d69d8b00dc4c8206d8a682a63e6c47a48705b07f4dfe259c5b"
+  },
+  "num-4": {
+   "file": "num-4.wav",
+   "text": "Number four. Look at picture number four in your test book.",
+   "duration": 4.36,
+   "sha256": "60c9cad7565920f0cd938002922efab60b9ef09fb4ee1c126d754127bfb5bd8d"
+  },
+  "num-5": {
+   "file": "num-5.wav",
+   "text": "Number five. Look at picture number five in your test book.",
+   "duration": 4.33,
+   "sha256": "a6af97a94dcde512c42a4e5315ee2fc9e5a4eca948739a7c98533357f9dd7e6e"
+  },
+  "num-6": {
+   "file": "num-6.wav",
+   "text": "Number six. Look at picture number six in your test book.",
+   "duration": 4.25,
+   "sha256": "c70760e9afcdf26f19eee39fffc14fdeeb3479ca60ca8e5c33a3037564041aaf"
+  },
+  "num-8": {
+   "file": "num-8.wav",
+   "text": "Number eight.",
+   "duration": 1.07,
+   "sha256": "0c9315bd8986e21e60a5e742a281591eaaa85b2b0a77aa4b4a0e5a404b6fd7e5"
+  },
+  "num-29": {
+   "file": "num-29.wav",
+   "text": "Number twenty-nine.",
+   "duration": 1.47,
+   "sha256": "bc6814c1d9c0e3905ef1f4c1e1dfeb8985790e2ac87cac781f0a226f22bbfe46"
+  }
+ }
+}

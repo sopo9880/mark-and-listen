@@ -1,4 +1,4 @@
-name: Signed Windows x64 beta 0.1.1.0
+name: Signed Windows x64 beta 0.2.0.0
 on:
   push:
     branches: [main]
@@ -9,12 +9,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: mark-and-listen-release-v0.1.1.0
+  group: mark-and-listen-release-v0.2.0.0
   cancel-in-progress: false
 
 env:
-  VERSION: 0.1.1.0
-  INSTALLER: Mark-and-Listen-0.1.1.0-Windows-x64-Setup.exe
+  VERSION: 0.2.0.0
+  MARK_BUILD_CHANNEL: release
+  INSTALLER: Mark-and-Listen-0.2.0.0-Windows-x64-Setup.exe
   # Repository variable shared by the installer build and manifest verification.
   MARK_UPDATE_PUBLIC_KEY: ${{ vars.APP_UPDATE_PUBLIC_KEY }}
 
@@ -99,4 +100,4 @@ jobs:
           fi
           gh release create "$tag" "beta/$INSTALLER" beta/SHA256SUMS.txt beta/update.json beta/update.json.sig \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
-            --title "Mark & Listen $VERSION Beta" --notes-file BETA-0.1.1.0.md
+            --title "Mark & Listen $VERSION Beta" --notes-file BETA-0.2.0.0.md

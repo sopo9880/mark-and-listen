@@ -13,5 +13,6 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-node src\server.mjs --open
+start "" http://127.0.0.1:4173/
+node src\main.mjs
 if errorlevel 1 pause

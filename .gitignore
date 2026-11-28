@@ -7,3 +7,12 @@ test-output/
 node_modules/
 staging/
 src-tauri/target/
+
+# Private assets: Part 1 photo packs stay local (import them in the app)
+*.zip
+*.jpg
+*.jpeg
+
+!assets/part1-photos/*.jpg
+!assets/jlpt-images/*.jpg
+__pycache__/
